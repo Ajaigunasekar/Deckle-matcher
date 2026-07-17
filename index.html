@@ -488,7 +488,6 @@
 
     <div style="display:flex; flex-direction:column; gap:8px;">
       <button class="btn-primary" onclick="runMatch()">🔍 RUN MATCH</button>
-      <button class="btn-secondary" onclick="exportData()">💾 Export Data</button>
       <button class="btn-secondary" onclick="clearAll()">✕ Clear All</button>
     </div>
 
@@ -505,10 +504,18 @@
     </div>
     <div class="stat-divider"></div>
     <div class="stat">
+      <div class="stat-dot" style="background:var(--red)"></div>
+      <div>
+        <div class="stat-val" id="statNo" style="color:var(--red)">0</div>
+        <div class="stat-lbl">No Match</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
       <div class="stat-dot" style="background:var(--sub)"></div>
       <div>
         <div class="stat-val" id="statTotal">0</div>
-        <div class="stat-lbl">Total Orders Loaded</div>
+        <div class="stat-lbl">Total Orders</div>
       </div>
     </div>
     <div class="deckle-info" id="deckleInfo"></div>
@@ -524,11 +531,12 @@
     <table id="resultsTable" style="display:none;">
       <thead>
         <tr>
-          <th onclick="sortTable('customer')">Customer(s) <span class="sort-arrow">↕</span></th>
+          <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
           <th class="center" onclick="sortTable('gsm')">GSM <span class="sort-arrow">↕</span></th>
           <th class="center" onclick="sortTable('bf')">BF <span class="sort-arrow">↕</span></th>
-          <th class="center" onclick="sortTable('_size')">Combined Size <span class="sort-arrow">↕</span></th>
-          <th class="center" onclick="sortTable('sets')">Sets (Reels) <span class="sort-arrow">↕</span></th>
+          <th class="center" onclick="sortTable('size')">Size (mm) <span class="sort-arrow">↕</span></th>
+          <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
+          <th class="center">Shade</th>
           <th class="center">Status</th>
         </tr>
       </thead>
@@ -554,11 +562,11 @@
       </div>
       <div class="input-row">
         <div class="field">
-          <label>Min Size</label>
+          <label>Min Size (mm)</label>
           <input type="number" id="newMin" placeholder="422" step="0.1">
         </div>
         <div class="field">
-          <label>Max Size</label>
+          <label>Max Size (mm)</label>
           <input type="number" id="newMax" placeholder="435" step="0.1">
         </div>
       </div>
@@ -579,9 +587,9 @@
 let rules = JSON.parse(localStorage.getItem('deckleRules') || 'null') || [
   { name: "Deckle 422-435", min: 422, max: 435 }
 ];
-let allRows   = [];   
-let matchRows = [];   
-let viewRows  = [];   
+let allRows   = [];   // parsed from Excel
+let matchRows = [];   // after matching
+let viewRows  = [];   // after filter
 let currentFilter = 'all';
 let sortKey   = null;
 let sortAsc   = true;
@@ -611,6 +619,7 @@ function handleFile(input) {
   reader.onload = (e) => {
     try {
       let rows = [];
+
       if (file.name.endsWith('.csv')) {
         const text = new TextDecoder().decode(e.target.result);
         const lines = text.trim().split('\n');
@@ -632,12 +641,13 @@ function handleFile(input) {
         });
       }
 
+      // Map common variations of the reels column
       allRows = rows.map(r => ({
         customer: r.customer || 'Unknown',
         gsm: parseFloat(r.gsm) || 0,
         bf: parseFloat(r.bf) || 0,
         size: parseFloat(r.size) || 0,
-        reels: parseFloat(r.reels || r['no of reels'] || r.qty) || 0,
+        reel: parseFloat(r.reel || r.reels || r['no of reels'] || r.qty) || 0,
         shade: r.shade || '-'
       }));
       
@@ -649,7 +659,7 @@ function handleFile(input) {
       document.getElementById('emptyState').style.display = 'none';
       document.getElementById('resultsTable').style.display = 'none';
       document.getElementById('statsBar').style.display = 'none';
-      toast(`✓ Loaded ${rows.length} orders`);
+      toast(`✓ Loaded ${allRows.length} orders`);
     } catch(err) {
       toast('Error reading file: ' + err.message, true);
     }
@@ -657,7 +667,7 @@ function handleFile(input) {
   reader.readAsArrayBuffer(file);
 }
 
-// ── Run match (Combination Logic) ─────────────────────────────────────────
+// ── Run match (Logic ONLY) ────────────────────────────────────────────────
 function runMatch() {
   if (!allRows.length) { toast('Please upload a file first', true); return; }
   const idx  = parseInt(document.getElementById('deckleSelect').value);
@@ -666,45 +676,53 @@ function runMatch() {
 
   matchRows = [];
   
-  // Group by GSM and BF
+  // 1. Group by GSM and BF
   let groups = {};
   allRows.forEach(row => {
-    if (!row.size || !row.reels) return; 
+    if (!row.size || !row.reel) return; 
     let key = `${row.gsm}_${row.bf}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(row);
   });
 
-  // Evaluate combinations for each group
+  // 2. Evaluate combinations (1, 2, 3, or 4 customers)
   Object.keys(groups).forEach(key => {
     let items = groups[key];
     let n = items.length;
 
     for (let i = 0; i < n; i++) {
-      checkCombo([items[i]], rule); // 1 Item
+      checkCombo([items[i]], rule); 
       for (let j = i + 1; j < n; j++) {
-        checkCombo([items[i], items[j]], rule); // 2 Items
+        checkCombo([items[i], items[j]], rule); 
         for (let k = j + 1; k < n; k++) {
-          checkCombo([items[i], items[j], items[k]], rule); // 3 Items
+          checkCombo([items[i], items[j], items[k]], rule); 
           for (let l = k + 1; l < n; l++) {
-            checkCombo([items[i], items[j], items[k], items[l]], rule); // 4 Items
+            checkCombo([items[i], items[j], items[k], items[l]], rule); 
           }
         }
       }
     }
   });
 
-  // Keep track of un-matched original rows for filtering
+  // 3. Keep unmatched original rows for filtering
   let matchedCombos = [...matchRows]; 
   let unMatched = allRows.map(r => ({
-    ...r, _size: r.size, sets: r.reels, _match: false 
+    customer: r.customer,
+    gsm: r.gsm,
+    bf: r.bf,
+    _size: r.size,
+    reel: r.reel,
+    shade: r.shade,
+    _match: false 
   }));
 
   matchRows = [...matchedCombos, ...unMatched];
 
   const nMatch = matchedCombos.length;
+  const nNo    = unMatched.length;
 
   document.getElementById('statMatch').textContent = nMatch;
+  document.getElementById('statNo').textContent    = nNo;
   document.getElementById('statTotal').textContent = allRows.length;
   document.getElementById('deckleInfo').innerHTML  =
     `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
@@ -717,16 +735,17 @@ function checkCombo(combo, rule) {
   let totalSize = combo.reduce((sum, item) => sum + item.size, 0);
   
   if (totalSize >= rule.min && totalSize <= rule.max) {
-    let minReels = Math.min(...combo.map(item => item.reels));
+    let minReels = Math.min(...combo.map(item => item.reel));
     
+    // Pushing into the exact variables expected by your original table structure
     matchRows.push({
       customer: combo.map(c => c.customer).join(' + '),
       gsm: combo[0].gsm,
       bf: combo[0].bf,
       _size: totalSize,
-      sets: minReels,
-      _match: true,
-      breakdown: combo.map(c => `${c.size} (${c.reels}R)`).join(' + ')
+      reel: minReels, // This maps to "Sets" in your logic
+      shade: combo[0].shade,
+      _match: true
     });
   }
 }
@@ -750,7 +769,8 @@ function applyFilter(f) {
   else if (f === 'nomatch') viewRows = matchRows.filter(r => !r._match);
   else viewRows = [...matchRows];
   
-  viewRows.sort((a, b) => b._size - a._size); // Default sort by size descending
+  // Sort combined sizes to top by default
+  viewRows.sort((a, b) => b._size - a._size);
   renderTable();
 }
 
@@ -760,13 +780,13 @@ function sortTable(key) {
   else { sortKey = key; sortAsc = true; }
 
   document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
-  const headers = ['customer','gsm','bf','_size','sets'];
+  const headers = ['customer','gsm','bf','size','reel','shade'];
   const thIdx = headers.indexOf(key);
   if (thIdx >= 0) document.querySelectorAll('thead th')[thIdx].classList.add('sorted');
 
   viewRows.sort((a, b) => {
-    let va = a[key];
-    let vb = b[key];
+    let va = key === 'size' ? a._size : a[key];
+    let vb = key === 'size' ? b._size : b[key];
     if (typeof va === 'string') va = va.toLowerCase();
     if (typeof vb === 'string') vb = vb.toLowerCase();
     if (va < vb) return sortAsc ? -1 : 1;
@@ -795,12 +815,15 @@ function renderTable() {
     const badge = r._match
       ? `<span class="badge badge-match">✔ Matched</span>`
       : `<span class="badge badge-nomatch">✕ No Match</span>`;
+    
+    // Rendering using exactly your original HTML structure
     return `<tr class="${cls}">
-      <td class="customer">${r.customer}<br><small style="color:var(--sub)">${r._match ? r.breakdown : ''}</small></td>
+      <td class="customer">${r.customer}</td>
       <td class="center">${r.gsm}</td>
       <td class="center">${r.bf}</td>
       <td class="size-val center">${r._size}</td>
-      <td class="center">${r.sets}</td>
+      <td class="center">${r.reel}</td>
+      <td class="center">${r.shade}</td>
       <td class="center">${badge}</td>
     </tr>`;
   }).join('');
@@ -824,6 +847,7 @@ function clearAll() {
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────────
+// (Same as original modal logic)
 function openModal() {
   renderRuleList();
   document.getElementById('modalOverlay').classList.add('show');
@@ -843,7 +867,7 @@ function renderRuleList() {
     <div class="rule-item">
       <div>
         <div class="rule-name">${r.name}</div>
-        <div class="rule-range">${r.min} – ${r.max}</div>
+        <div class="rule-range">${r.min} – ${r.max} mm</div>
       </div>
       <div class="rule-actions">
         <button class="btn-sm danger" onclick="deleteRule(${i})">✕ Delete</button>
@@ -878,24 +902,6 @@ function deleteRule(i) {
   refreshSelect();
   renderRuleList();
   toast(`Deleted "${name}"`);
-}
-
-// ── Export ─────────────────────────────────────────────────────────────────
-function exportData() {
-  if (!viewRows.length) { toast('No data to export', true); return; }
-  const ws = XLSX.utils.json_to_sheet(viewRows.map(r => ({
-    Customer: r.customer,
-    Breakdown: r._match ? r.breakdown : '-',
-    GSM: r.gsm,
-    BF: r.bf,
-    Total_Size: r._size,
-    Sets: r.sets,
-    Status: r._match ? 'Matched' : 'No Match'
-  })));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Matches");
-  XLSX.writeFile(wb, "Deckle_Results.xlsx");
-  toast('✓ File Exported');
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
