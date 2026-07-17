@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Deckle Match</title>
+  <style>
+    :root {
+      --bg: #0d0f18; --surface: #13161f; --card: #1c2030; --accent: #4f8ef7;
+      --text: #e8eaf0; --sub: #7a80a0; --border: #2a2f45; --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; min-height: 100vh; }
+    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 18px 24px; font-weight: bold; color: var(--accent); }
+    .main { display: grid; grid-template-columns: 280px 1fr; padding: 20px; gap: 20px; }
+    input, select, button { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+    button { background: var(--accent); color: white; cursor: pointer; font-weight: bold; }
+    @media (max-width: 768px) { .main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<div class="header">⬡ DECKLE MATCH</div>
+<div class="main">
+  <aside>
+    <label>1. Upload Excel</label>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+    <label>2. Run Match</label>
+    <button onclick="runMatch()">🔍 RUN MATCH</button>
+    <button onclick="exportData()">💾 Export Visible Data</button>
+  </aside>
+  <div style="overflow-x: auto;">
+    <table id="resultsTable" style="width: 100%; border-collapse: collapse;">
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+  let viewRows = [];
+  function exportData() {
+    if (viewRows.length === 0) { alert('No data to export'); return; }
+    const ws = XLSX.utils.json_to_sheet(viewRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Results");
+    XLSX.writeFile(wb, "DeckleMatch_Export.xlsx");
+  }
+  function runMatch() { alert("Please ensure file is uploaded to trigger match logic."); }
+</script>
+</body>
+</html>
