@@ -667,7 +667,7 @@ function handleFile(input) {
   reader.readAsArrayBuffer(file);
 }
 
-// ── Run match (Advanced Combination Logic) ────────────────────────────────
+// ── Run match (Combination Logic to Output Image Format) ──────────────────
 function runMatch() {
   if (!allRows.length) { toast('Please upload a file first', true); return; }
   const idx  = parseInt(document.getElementById('deckleSelect').value);
@@ -676,66 +676,31 @@ function runMatch() {
 
   matchRows = [];
   
-  // 1. Group strictly by GSM
+  // 1. Group by GSM and BF
   let groups = {};
   allRows.forEach(row => {
     if (!row.size || !row.reel) return; 
-    let key = `${row.gsm}`; // GSM must match exactly
+    let key = `${row.gsm}_${row.bf}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(row);
   });
 
-  // 2. Recursive Combination Finder (1 to 5 orders)
+  // 2. Evaluate combinations (1, 2, 3, or 4 customers)
   Object.keys(groups).forEach(key => {
     let items = groups[key];
+    let n = items.length;
 
-    function findCombos(startIndex, currentCombo, currentSize, minBf, maxBf) {
-      // Check if current combination size fits the deckle rule
-      if (currentSize >= rule.min && currentSize <= rule.max) {
-        let minReels = Math.min(...currentCombo.map(item => item.reel));
-        let sizeEquation = currentCombo.length > 1 
-          ? currentCombo.map(c => c.size).join('+') + '=' + currentSize 
-          : currentSize;
-
-        matchRows.push({
-          customer: currentCombo.map(c => c.customer).join(', '),
-          display_customer: currentCombo.map(c => c.customer).join('<br>'), // Stacks vertically
-          gsm: currentCombo[0].gsm,
-          display_gsm: currentCombo.map(c => c.gsm).join('<br>'),
-          bf: currentCombo[0].bf,
-          display_bf: currentCombo.map(c => c.bf).join('<br>'),
-          _size: currentSize,
-          display_size: sizeEquation,
-          reel: minReels, 
-          shade: currentCombo[0].shade,
-          _match: true
-        });
+    for (let i = 0; i < n; i++) {
+      checkCombo([items[i]], rule); 
+      for (let j = i + 1; j < n; j++) {
+        checkCombo([items[i], items[j]], rule); 
+        for (let k = j + 1; k < n; k++) {
+          checkCombo([items[i], items[j], items[k]], rule); 
+          for (let l = k + 1; l < n; l++) {
+            checkCombo([items[i], items[j], items[k], items[l]], rule); 
+          }
+        }
       }
-      
-      // Stop checking if we hit 5 orders in one combo
-      if (currentCombo.length >= 5) return;
-
-      for (let i = startIndex; i < items.length; i++) {
-        let item = items[i];
-        let newSize = currentSize + item.size;
-        
-        // Prune if total size exceeds max deckle
-        if (newSize > rule.max) continue;
-
-        // Ensure max BF difference within the combination is <= 2
-        let newMinBf = Math.min(minBf, item.bf);
-        let newMaxBf = Math.max(maxBf, item.bf);
-        if (newMaxBf - newMinBf > 2) continue;
-
-        currentCombo.push(item);
-        findCombos(i + 1, currentCombo, newSize, newMinBf, newMaxBf);
-        currentCombo.pop();
-      }
-    }
-
-    // Start combinations for this GSM group
-    for (let i = 0; i < items.length; i++) {
-      findCombos(i + 1, [items[i]], items[i].size, items[i].bf, items[i].bf);
     }
   });
 
@@ -743,13 +708,11 @@ function runMatch() {
   let matchedCombos = [...matchRows]; 
   let unMatched = allRows.map(r => ({
     customer: r.customer,
-    display_customer: r.customer, 
+    display_customer: r.customer, // Fallback for unmatched
     gsm: r.gsm,
-    display_gsm: r.gsm,
     bf: r.bf,
-    display_bf: r.bf,
     _size: r.size,
-    display_size: r.size, 
+    display_size: r.size, // Normal size format for unmatched
     reel: r.reel,
     shade: r.shade,
     _match: false 
@@ -767,9 +730,32 @@ function runMatch() {
     `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
   document.getElementById('statsBar').style.display = 'flex';
 
-  // Automatically show matched records prioritizing max sets
-  currentFilter = 'match';
-  setFilter('match');
+  applyFilter(currentFilter);
+}
+
+function checkCombo(combo, rule) {
+  let totalSize = combo.reduce((sum, item) => sum + item.size, 0);
+  
+  if (totalSize >= rule.min && totalSize <= rule.max) {
+    let minReels = Math.min(...combo.map(item => item.reel));
+    
+    // Check if it's a single order or combination to format the size equation correctly
+    let sizeEquation = combo.length > 1 
+      ? combo.map(c => c.size).join('+') + '=' + totalSize 
+      : totalSize;
+
+    matchRows.push({
+      customer: combo.map(c => c.customer).join(', '), // Used for pure sorting logic
+      display_customer: combo.map(c => c.customer).join('<br>'), // HTML string to stack names vertically like the image
+      gsm: combo[0].gsm,
+      bf: combo[0].bf,
+      _size: totalSize, // Used for numerical sorting logic
+      display_size: sizeEquation, // Outputs "200+100+125=425" like the image
+      reel: minReels, 
+      shade: combo[0].shade,
+      _match: true
+    });
+  }
 }
 
 // ── Filter ─────────────────────────────────────────────────────────────────
@@ -791,11 +777,8 @@ function applyFilter(f) {
   else if (f === 'nomatch') viewRows = matchRows.filter(r => !r._match);
   else viewRows = [...matchRows];
   
-  // Custom Sort: Prioritize Highest Sets (Reel), then Total Size
-  viewRows.sort((a, b) => {
-    if (b.reel !== a.reel) return b.reel - a.reel; // Sets descending
-    return b._size - a._size; // Size descending
-  });
+  // Sort combined sizes to top by default
+  viewRows.sort((a, b) => b._size - a._size);
   renderTable();
 }
 
@@ -841,11 +824,11 @@ function renderTable() {
       ? `<span class="badge badge-match">✔ Matched</span>`
       : `<span class="badge badge-nomatch">✕ No Match</span>`;
     
-    // Applying the stacked display logic mapping perfectly to your hand-drawn layout
+    // Injecting the custom formatted strings (display_customer and display_size) directly into your original UI
     return `<tr class="${cls}">
       <td class="customer" style="line-height:1.6;">${r.display_customer}</td>
-      <td class="center" style="line-height:1.6;">${r.display_gsm}</td>
-      <td class="center" style="line-height:1.6;">${r.display_bf}</td>
+      <td class="center">${r.gsm}</td>
+      <td class="center">${r.bf}</td>
       <td class="size-val center">${r.display_size}</td>
       <td class="center">${r.reel} sets</td>
       <td class="center">${r.shade}</td>
