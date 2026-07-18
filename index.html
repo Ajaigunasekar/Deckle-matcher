@@ -78,7 +78,6 @@
   }
   .btn-icon:active { background: var(--border); }
   
-  /* Sidebar Toggle Button Specifics */
   .sidebar-toggle {
     font-size: 18px;
     padding: 8px 12px;
@@ -517,6 +516,7 @@
 
     <div style="display:flex; flex-direction:column; gap:8px;">
       <button class="btn-primary" onclick="runMatch()">🔍 RUN MATCH</button>
+      <button class="btn-secondary" onclick="showRemaining()">📋 SHOW REMAINING</button>
       <button class="btn-secondary" onclick="clearAll()">✕ Clear All</button>
     </div>
 
@@ -558,16 +558,8 @@
       <div class="empty-sub">Upload your Excel file and tap Run Match to begin.</div>
     </div>
     <table id="resultsTable" style="display:none;">
-      <thead>
-        <tr>
-          <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
-          <th class="center" onclick="sortTable('gsm')">GSM <span class="sort-arrow">↕</span></th>
-          <th class="center" onclick="sortTable('bf')">BF <span class="sort-arrow">↕</span></th>
-          <th class="center" onclick="sortTable('size')">Size (mm) <span class="sort-arrow">↕</span></th>
-          <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
-          <th class="center">Shade</th>
-          <th class="center">Status</th>
-        </tr>
+      <thead id="tableHead">
+        <!-- Will be dynamically managed via JS depending on view mode -->
       </thead>
       <tbody id="tableBody"></tbody>
     </table>
@@ -627,6 +619,7 @@ let viewRows  = [];
 let currentFilter = 'all';
 let sortKey   = null;
 let sortAsc   = true;
+let isRemainingMode = false;
 
 // ── Persist ────────────────────────────────────────────────────────────────
 function saveRules() {
@@ -668,25 +661,26 @@ function handleFile(input) {
         const wb = XLSX.read(e.target.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        rows = rows.map(r => {
-          const out = {};
-          Object.keys(r).forEach(k => { out[k.trim().toLowerCase()] = r[k]; });
-          return out;
-        });
       }
 
-      // Map common variations of the reels column
-      allRows = rows.map(r => ({
-        customer: r.customer || 'Unknown',
-        gsm: parseFloat(r.gsm) || 0,
-        bf: parseFloat(r.bf) || 0,
-        size: parseFloat(r.size) || 0,
-        reel: parseFloat(r.reel || r.reels || r['no of reels'] || r.qty) || 0,
-        shade: r.shade || '-'
-      }));
+      // Safe key-matching strategy to parse column variants cleanly
+      allRows = rows.map(r => {
+        let normalized = {};
+        Object.keys(r).forEach(k => { normalized[k.trim().toLowerCase().replace(/[\s_]/g, '')] = r[k]; });
+        
+        let customer = normalized['customer'] || normalized['customername'] || normalized['name'] || 'Unknown';
+        let gsm = parseFloat(normalized['gsm']) || 0;
+        let bf = parseFloat(normalized['bf']) || 0;
+        let size = parseFloat(normalized['size']) || 0;
+        let reel = parseFloat(normalized['reel'] || normalized['reels'] || normalized['noofreels'] || normalized['qty']) || 0;
+        let shade = normalized['shade'] || '-';
+        
+        return { customer, gsm, bf, size, reel, shade };
+      }).filter(row => row.size > 0 && row.reel > 0);
       
       matchRows = [];
       viewRows  = [];
+      isRemainingMode = false;
       document.getElementById('fileBadge').classList.add('show');
       document.getElementById('fileName').textContent = file.name;
       document.getElementById('uploadZone').style.display = 'none';
@@ -695,7 +689,6 @@ function handleFile(input) {
       document.getElementById('statsBar').style.display = 'none';
       toast(`✓ Loaded ${allRows.length} orders`);
       
-      // Automatically expand sidebar when a file is uploaded (just in case it was hidden)
       document.querySelector('.main').classList.remove('sidebar-hidden');
     } catch(err) {
       toast('Error reading file: ' + err.message, true);
@@ -711,15 +704,15 @@ function runMatch() {
   const rule = rules[idx];
   if (!rule) { toast('Please select a deckle range', true); return; }
 
+  isRemainingMode = false;
   matchRows = [];
   
   // 1. Group strictly by GSM
   let groups = {};
   allRows.forEach(row => {
-    if (!row.size || !row.reel) return; 
     let key = `${row.gsm}`; 
     if (!groups[key]) groups[key] = [];
-    groups[key].push(row);
+    groups[key].push(JSON.parse(JSON.stringify(row))); // deep clone to handle assignments cleanly
   });
 
   // 2. Recursive Combination Finder (1 to 5 orders)
@@ -727,7 +720,6 @@ function runMatch() {
     let items = groups[key];
 
     function findCombos(startIndex, currentCombo, currentSize, minBf, maxBf) {
-      // Check if current combination size fits the deckle rule
       if (currentSize >= rule.min && currentSize <= rule.max) {
         let minReels = Math.min(...currentCombo.map(item => item.reel));
         let sizeEquation = currentCombo.length > 1 
@@ -735,7 +727,7 @@ function runMatch() {
           : '';
 
         matchRows.push({
-          comboData: [...currentCombo], // Pass the array of original objects to build the bordered rows
+          comboData: [...currentCombo], 
           customer: currentCombo.map(c => c.customer).join(', '),
           gsm: currentCombo[0].gsm,
           bf: currentCombo[0].bf,
@@ -770,22 +762,36 @@ function runMatch() {
     }
   });
 
-  // 3. Keep unmatched original rows for filtering
+  // 3. Keep track of unmatched single records for calculations
   let matchedCombos = [...matchRows]; 
-  let unMatched = allRows.map(r => ({
-    customer: r.customer,
-    gsm: r.gsm,
-    bf: r.bf,
-    _size: r.size,
-    reel: r.reel,
-    shade: r.shade,
-    _match: false 
-  }));
+  
+  // A record is truly unmatched if it didn't participate in any successful combination setup
+  let matchedInstances = new Set();
+  matchedCombos.forEach(c => {
+    c.comboData.forEach(item => {
+      matchedInstances.add(`${item.customer}_${item.gsm}_${item.bf}_${item.size}`);
+    });
+  });
+
+  let unMatched = allRows.map(r => {
+    let isUsed = matchedInstances.has(`${r.customer}_${r.gsm}_${r.bf}_${r.size}`);
+    return {
+      customer: r.customer,
+      gsm: r.gsm,
+      bf: r.bf,
+      _size: r.size,
+      reel: r.reel,
+      shade: r.shade,
+      _match: false,
+      _trulyUnused: !isUsed
+    };
+  });
 
   matchRows = [...matchedCombos, ...unMatched];
 
   const nMatch = matchedCombos.length;
-  const nNo    = unMatched.length;
+  // Calculate distinct items that found no arrangement option
+  const nNo    = unMatched.filter(r => r._trulyUnused).length;
 
   document.getElementById('statMatch').textContent = nMatch;
   document.getElementById('statNo').textContent    = nNo;
@@ -797,7 +803,35 @@ function runMatch() {
   currentFilter = 'match';
   setFilter('match');
   
-  // Auto-collapse sidebar after running match to reveal table space
+  if(window.innerWidth > 768) {
+    document.querySelector('.main').classList.add('sidebar-hidden');
+  }
+}
+
+// ── Show Remaining Unmatched Items Mode ────────────────────────────────────
+function showRemaining() {
+  if (!allRows.length) { toast('Please upload a file first', true); return; }
+  
+  isRemainingMode = true;
+  
+  // Highlight no active pill matching this custom view screen
+  document.querySelectorAll('.pills .pill').forEach(p => p.className = 'pill');
+  
+  // Identify remaining items that couldn't fit any valid combination
+  let matchedInstances = new Set();
+  matchRows.filter(r => r._match).forEach(c => {
+    c.comboData.forEach(item => {
+      matchedInstances.add(`${item.customer}_${item.gsm}_${item.bf}_${item.size}`);
+    });
+  });
+  
+  viewRows = allRows.filter(r => !matchedInstances.has(`${r.customer}_${r.gsm}_${r.bf}_${r.size}`));
+  
+  // Default Sort remaining layout by GSM descending
+  viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
+  
+  renderTable();
+  
   if(window.innerWidth > 768) {
     document.querySelector('.main').classList.add('sidebar-hidden');
   }
@@ -805,6 +839,7 @@ function runMatch() {
 
 // ── Filter ─────────────────────────────────────────────────────────────────
 function setFilter(f) {
+  isRemainingMode = false;
   currentFilter = f;
   document.querySelectorAll('.pill').forEach(p => {
     p.className = 'pill';
@@ -819,13 +854,26 @@ function setFilter(f) {
 
 function applyFilter(f) {
   if (f === 'match')   viewRows = matchRows.filter(r => r._match);
-  else if (f === 'nomatch') viewRows = matchRows.filter(r => !r._match);
+  else if (f === 'nomatch') {
+    // Show single records that were completely skipped by optimization passes
+    let matchedInstances = new Set();
+    matchRows.filter(r => r._match).forEach(c => {
+      c.comboData.forEach(item => {
+        matchedInstances.add(`${item.customer}_${item.gsm}_${item.bf}_${item.size}`);
+      });
+    });
+    viewRows = matchRows.filter(r => !r._match && !matchedInstances.has(`${r.customer}_${r.gsm}_${r.bf}_${r.size}`));
+  }
   else viewRows = [...matchRows];
   
-  viewRows.sort((a, b) => {
-    if (b.reel !== a.reel) return b.reel - a.reel; 
-    return b._size - a._size; 
-  });
+  if (f === 'match') {
+    viewRows.sort((a, b) => {
+      if (b.reel !== a.reel) return b.reel - a.reel; 
+      return b._size - a._size; 
+    });
+  } else {
+    viewRows.sort((a, b) => b._size - a._size);
+  }
   renderTable();
 }
 
@@ -835,13 +883,16 @@ function sortTable(key) {
   else { sortKey = key; sortAsc = true; }
 
   document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
-  const headers = ['customer','gsm','bf','size','reel','shade'];
-  const thIdx = headers.indexOf(key);
-  if (thIdx >= 0) document.querySelectorAll('thead th')[thIdx].classList.add('sorted');
+  
+  let headerCells = document.querySelectorAll('thead th');
+  if(headerCells.length > 0) {
+    let clickedHeader = Array.from(headerCells).find(th => th.getAttribute('onclick').includes(key));
+    if(clickedHeader) clickedHeader.classList.add('sorted');
+  }
 
   viewRows.sort((a, b) => {
-    let va = key === 'size' ? a._size : a[key];
-    let vb = key === 'size' ? b._size : b[key];
+    let va = key === 'size' ? (a._size || a.size) : a[key];
+    let vb = key === 'size' ? (b._size || b.size) : b[key];
     if (typeof va === 'string') va = va.toLowerCase();
     if (typeof vb === 'string') vb = vb.toLowerCase();
     if (va < vb) return sortAsc ? -1 : 1;
@@ -853,6 +904,7 @@ function sortTable(key) {
 
 // ── Render ─────────────────────────────────────────────────────────────────
 function renderTable() {
+  const thead = document.getElementById('tableHead');
   const tbody = document.getElementById('tableBody');
   const table = document.getElementById('resultsTable');
   const empty = document.getElementById('emptyState');
@@ -865,56 +917,86 @@ function renderTable() {
     return;
   }
 
-  tbody.innerHTML = viewRows.map(r => {
-    const cls   = r._match ? 'row-match' : 'row-nomatch';
-    const badge = r._match
-      ? `<span class="badge badge-match">✔ Matched</span>`
-      : `<span class="badge badge-nomatch">✕ No Match</span>`;
-    
-    // Create the inner line separators for Customer, GSM, and BF
-    let custHtml = `<div style="padding:13px 14px;">${r.customer}</div>`;
-    let gsmHtml = `<div style="padding:13px 14px;">${r.gsm}</div>`;
-    let bfHtml = `<div style="padding:13px 14px;">${r.bf}</div>`;
-
-    if (r._match && r.comboData) {
-      custHtml = r.comboData.map((c, i) => 
-        `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer}</div>`
-      ).join('');
-      
-      gsmHtml = r.comboData.map((c, i) => 
-        `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.gsm}</div>`
-      ).join('');
-      
-      bfHtml = r.comboData.map((c, i) => 
-        `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.bf}</div>`
-      ).join('');
-    }
-
-    return `<tr class="${cls}">
-      <td class="customer" style="padding:0; vertical-align:top;">
-        <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
-          ${custHtml}
-        </div>
-      </td>
-      <td class="center" style="padding:0; vertical-align:top;">
-        <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
-          ${gsmHtml}
-        </div>
-      </td>
-      <td class="center" style="padding:0; vertical-align:top;">
-        <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
-          ${bfHtml}
-        </div>
-      </td>
-      <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
-        ${r._match && r.combo_str ? `<div style="font-size:11px; color:var(--sub); margin-bottom:4px; font-weight:normal;">${r.combo_str}</div>` : ''}
-        <div>${r._size}</div>
-      </td>
-      <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
-      <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.shade || '-'}</td>
-      <td class="center" style="vertical-align:middle; padding:13px 14px;">${badge}</td>
+  // Manage table header template switch cleanly based on the feature selected
+  if (isRemainingMode) {
+    thead.innerHTML = `<tr>
+      <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('gsm')">GSM <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('bf')">BF <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('size')">Size (mm) <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
+      <th class="center">Shade</th>
     </tr>`;
-  }).join('');
+
+    tbody.innerHTML = viewRows.map(r => `<tr class="row-nomatch">
+      <td class="customer">${r.customer}</td>
+      <td class="center">${r.gsm}</td>
+      <td class="center">${r.bf}</td>
+      <td class="size-val center">${r.size}</td>
+      <td class="center">${r.reel} reels</td>
+      <td class="center">${r.shade}</td>
+    </tr>`).join('');
+  } else {
+    thead.innerHTML = `<tr>
+      <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('gsm')">GSM <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('bf')">BF <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('size')">Size (mm) <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
+      <th class="center">Shade</th>
+      <th class="center">Status</th>
+    </tr>`;
+
+    tbody.innerHTML = viewRows.map(r => {
+      const cls   = r._match ? 'row-match' : 'row-nomatch';
+      const badge = r._match
+        ? `<span class="badge badge-match">✔ Matched</span>`
+        : `<span class="badge badge-nomatch">✕ No Match</span>`;
+      
+      let custHtml = `<div style="padding:13px 14px;">${r.customer}</div>`;
+      let gsmHtml = `<div style="padding:13px 14px;">${r.gsm}</div>`;
+      let bfHtml = `<div style="padding:13px 14px;">${r.bf}</div>`;
+
+      if (r._match && r.comboData) {
+        custHtml = r.comboData.map((c, i) => 
+          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer}</div>`
+        ).join('');
+        
+        gsmHtml = r.comboData.map((c, i) => 
+          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.gsm}</div>`
+        ).join('');
+        
+        bfHtml = r.comboData.map((c, i) => 
+          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.bf}</div>`
+        ).join('');
+      }
+
+      return `<tr class="${cls}">
+        <td class="customer" style="padding:0; vertical-align:top;">
+          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+            ${custHtml}
+          </div>
+        </td>
+        <td class="center" style="padding:0; vertical-align:top;">
+          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+            ${gsmHtml}
+          </div>
+        </td>
+        <td class="center" style="padding:0; vertical-align:top;">
+          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+            ${bfHtml}
+          </div>
+        </td>
+        <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
+          ${r._match && r.combo_str ? `<div style="font-size:11px; color:var(--sub); margin-bottom:4px; font-weight:normal;">${r.combo_str}</div>` : ''}
+          <div>${r._size}</div>
+        </td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel} ${r._match ? 'sets' : 'reels'}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.shade || '-'}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${badge}</td>
+      </tr>`;
+    }).join('');
+  }
 
   table.style.display = 'table';
   empty.style.display = 'none';
@@ -923,6 +1005,7 @@ function renderTable() {
 // ── Clear ──────────────────────────────────────────────────────────────────
 function clearAll() {
   allRows = matchRows = viewRows = [];
+  isRemainingMode = false;
   document.getElementById('fileBadge').classList.remove('show');
   document.getElementById('uploadZone').style.display = '';
   document.getElementById('fileInput').value = '';
@@ -932,7 +1015,6 @@ function clearAll() {
   document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
   document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file and tap Run Match to begin.';
   
-  // Bring sidebar back if it was hidden
   document.querySelector('.main').classList.remove('sidebar-hidden');
   toast('Cleared');
 }
