@@ -686,7 +686,6 @@ function handleFile(input) {
           return parseFloat(String(val).replace(/[^\d.-]/g, '')) || 0;
         };
 
-        // Smart parser that splits "170/16" instead of squishing it
         let parseField = (val, isGsm) => {
            if (val === null || val === undefined) return 0;
            let str = String(val);
@@ -702,7 +701,6 @@ function handleFile(input) {
         let gsmValRaw = getVal(['gsm/bf', 'gsmbf', 'gsm']);
         let bfValRaw = getVal(['gsm/bf', 'gsmbf', 'bf', 'b.f']);
         
-        // Fallback: If BF column is missing but GSM has "170/16", pull BF from there
         if (!bfValRaw && gsmValRaw && String(gsmValRaw).includes('/')) {
             bfValRaw = gsmValRaw;
         }
@@ -714,7 +712,6 @@ function handleFile(input) {
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let shade = getVal(['shade']) || '-';
         
-        // Inject unique ID so we can track exactly which specific row gets used
         return { id: index, customer, gsm, bf, size, reel, shade };
       }).filter(row => row.size > 0 && row.reel > 0);
       
@@ -738,7 +735,7 @@ function handleFile(input) {
   reader.readAsArrayBuffer(file);
 }
 
-// ── Run match (Advanced Combination Logic) ────────────────────────────────
+// ── Run match (Inventory Deduction Algorithm) ──────────────────────────────
 function runMatch() {
   if (!allRows.length) { toast('Please upload a file first', true); return; }
   const idx  = parseInt(document.getElementById('deckleSelect').value);
@@ -748,90 +745,134 @@ function runMatch() {
   isRemainingMode = false;
   matchRows = [];
   
-  // 1. Group strictly by GSM
+  // Group by exact GSM. Deep clone to manage available inventory safely
   let groups = {};
   allRows.forEach(row => {
     let key = `${row.gsm}`; 
     if (!groups[key]) groups[key] = [];
-    groups[key].push(row); 
+    groups[key].push(JSON.parse(JSON.stringify(row))); 
   });
 
-  // 2. Recursive Combination Finder (1 to 5 orders)
   Object.keys(groups).forEach(key => {
     let items = groups[key];
 
-    function findCombos(startIndex, currentCombo, currentSize, minBf, maxBf) {
-      if (currentSize >= rule.min && currentSize <= rule.max) {
-        let minReels = Math.min(...currentCombo.map(item => item.reel));
-        let sizeEquation = currentCombo.length > 1 
-          ? currentCombo.map(c => c.size).join(' + ')
-          : '';
+    let keepMatching = true;
+    while(keepMatching) {
+      let available = items.filter(i => i.reel > 0);
+      if (available.length === 0) break;
+
+      let bestCombo = null;
+      let bestScore = -1;
+
+      // Recursive Search for the best valid combination
+      function search(startIndex, currentCombo, currentSize, minBf, maxBf, usedCounts) {
+        if (currentSize >= rule.min && currentSize <= rule.max) {
+          
+          let itemCounts = {};
+          currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
+          
+          let sets = Math.min(...Object.keys(itemCounts).map(id => {
+            let origItem = available.find(a => a.id == id);
+            return Math.floor(origItem.reel / itemCounts[id]);
+          }));
+
+          if (sets > 0) {
+            let reelsProcessed = sets * currentCombo.length;
+            let score = (reelsProcessed * 10000) + currentSize;
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestCombo = currentCombo.map(c => ({...c}));
+            }
+          }
+        }
+
+        if (currentCombo.length >= 5) return;
+
+        for (let i = startIndex; i < available.length; i++) {
+          let item = available[i];
+          let newSize = currentSize + item.size;
+          if (newSize > rule.max) continue;
+
+          let countUsed = usedCounts[item.id] || 0;
+          if (item.reel < countUsed + 1) continue;
+
+          let newMinBf = Math.min(minBf, item.bf);
+          let newMaxBf = Math.max(maxBf, item.bf);
+          if (newMaxBf - newMinBf > 2) continue;
+
+          currentCombo.push(item);
+          usedCounts[item.id] = countUsed + 1;
+
+          // Pass `i` to allow self-combination
+          search(i, currentCombo, newSize, newMinBf, newMaxBf, usedCounts);
+
+          currentCombo.pop();
+          usedCounts[item.id] = countUsed;
+        }
+      }
+
+      for (let i = 0; i < available.length; i++) {
+        let used = {};
+        used[available[i].id] = 1;
+        search(i, [available[i]], available[i].size, available[i].bf, available[i].bf, used);
+      }
+
+      if (bestCombo) {
+        let itemCounts = {};
+        bestCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
+        
+        let sets = Math.min(...Object.keys(itemCounts).map(id => {
+          let origItem = available.find(a => a.id == id);
+          return Math.floor(origItem.reel / itemCounts[id]);
+        }));
+
+        // Deduct inventory
+        Object.keys(itemCounts).forEach(id => {
+          let orig = items.find(item => item.id == id);
+          orig.reel -= (sets * itemCounts[id]);
+        });
+
+        let sizeEquation = bestCombo.length > 1 ? bestCombo.map(c => c.size).join(' + ') : '';
+        let totalSize = bestCombo.reduce((sum, c) => sum + c.size, 0);
 
         matchRows.push({
-          comboData: [...currentCombo], 
-          customer: currentCombo.map(c => c.customer).join(', '),
-          gsm: currentCombo[0].gsm,
-          bf: currentCombo[0].bf,
-          _size: currentSize,
+          comboData: bestCombo, 
+          customer: bestCombo.map(c => c.customer).join(', '),
+          gsm: bestCombo[0].gsm,
+          bf: bestCombo[0].bf,
+          _size: totalSize,
           combo_str: sizeEquation,
-          reel: minReels, 
-          shade: currentCombo[0].shade,
+          reel: sets, 
+          shade: bestCombo[0].shade,
           _match: true
         });
+      } else {
+        keepMatching = false;
       }
-      
-      if (currentCombo.length >= 5) return;
-
-      for (let i = startIndex; i < items.length; i++) {
-        let item = items[i];
-        let newSize = currentSize + item.size;
-        
-        if (newSize > rule.max) continue;
-
-        let newMinBf = Math.min(minBf, item.bf);
-        let newMaxBf = Math.max(maxBf, item.bf);
-        if (newMaxBf - newMinBf > 2) continue;
-
-        currentCombo.push(item);
-        findCombos(i + 1, currentCombo, newSize, newMinBf, newMaxBf);
-        currentCombo.pop();
-      }
-    }
-
-    for (let i = 0; i < items.length; i++) {
-      findCombos(i + 1, [items[i]], items[i].size, items[i].bf, items[i].bf);
     }
   });
 
   let matchedCombos = [...matchRows]; 
+  let unMatched = [];
   
-  // Track IDs to know exactly which records were utilized in ANY combination
-  let matchedInstances = new Set();
-  matchedCombos.forEach(c => {
-    c.comboData.forEach(item => {
-      matchedInstances.add(item.id);
-    });
-  });
-
-  let unMatched = allRows.map(r => {
-    let isUsed = matchedInstances.has(r.id);
-    return {
-      id: r.id,
-      customer: r.customer,
-      gsm: r.gsm,
-      bf: r.bf,
-      _size: r.size,
-      reel: r.reel,
-      shade: r.shade,
-      _match: false,
-      _trulyUnused: !isUsed
-    };
+  // Push anything with remaining inventory
+  Object.keys(groups).forEach(key => {
+     groups[key].forEach(item => {
+        if (item.reel > 0) {
+           unMatched.push({
+              ...item,
+              _size: item.size,
+              _match: false
+           });
+        }
+     });
   });
 
   matchRows = [...matchedCombos, ...unMatched];
 
   const nMatch = matchedCombos.length;
-  const nNo    = unMatched.filter(r => r._trulyUnused).length;
+  const nNo    = unMatched.length;
 
   document.getElementById('statMatch').textContent = nMatch;
   document.getElementById('statNo').textContent    = nNo;
@@ -854,22 +895,12 @@ function showRemaining() {
   
   isRemainingMode = true;
   
-  // Clear Active Filter Pills since this is a unique view
   document.querySelectorAll('.pills .pill').forEach(p => p.className = 'pill');
   
-  // Find everything that never appeared in a successful combination
-  let matchedInstances = new Set();
-  matchRows.filter(r => r._match).forEach(c => {
-    c.comboData.forEach(item => {
-      matchedInstances.add(item.id);
-    });
-  });
+  // Display only remaining inventory
+  viewRows = matchRows.filter(r => !r._match);
   
-  viewRows = allRows.filter(r => !matchedInstances.has(r.id));
-  
-  // Sort remaining view logically by GSM then BF
   viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
-  
   renderTable();
   
   if(window.innerWidth > 768) {
@@ -894,19 +925,10 @@ function setFilter(f) {
 
 function applyFilter(f) {
   if (f === 'match')   viewRows = matchRows.filter(r => r._match);
-  else if (f === 'nomatch') {
-    let matchedInstances = new Set();
-    matchRows.filter(r => r._match).forEach(c => {
-      c.comboData.forEach(item => {
-        matchedInstances.add(item.id);
-      });
-    });
-    viewRows = matchRows.filter(r => !r._match && !matchedInstances.has(r.id));
-  }
+  else if (f === 'nomatch') viewRows = matchRows.filter(r => !r._match);
   else viewRows = [...matchRows];
   
   if (f === 'match') {
-    // Prioritize by Sets descending, then combined size
     viewRows.sort((a, b) => {
       if (b.reel !== a.reel) return b.reel - a.reel; 
       return b._size - a._size; 
@@ -960,13 +982,12 @@ function renderTable() {
   
   document.getElementById('remainingActions').style.display = isRemainingMode ? 'block' : 'none';
 
-  // Handle header template switching with Merged GSM / BF
   if (isRemainingMode) {
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">Remaining Reels <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
     </tr>`;
 
@@ -974,7 +995,7 @@ function renderTable() {
       <td class="customer" style="padding:13px 14px;">${r.customer}</td>
       <td class="center" style="padding:13px 14px;">${r.gsm} / ${r.bf}</td>
       <td class="size-val center" style="padding:13px 14px;">${r.size}</td>
-      <td class="center" style="padding:13px 14px;">${r.reel} reels</td>
+      <td class="center" style="padding:13px 14px;">${r.reel}</td>
       <td class="center" style="padding:13px 14px;">${r.shade || '-'}</td>
     </tr>`).join('');
     
@@ -983,7 +1004,7 @@ function renderTable() {
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Combined Size <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">Sets <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
       <th class="center">Status</th>
     </tr>`;
@@ -1002,7 +1023,7 @@ function renderTable() {
           `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.size}] (${r.reel})</div>`
         ).join('');
         
-        // Render GSM / BF exactly once, vertically centered for the combo
+        // Single, perfectly centered GSM/BF representation
         gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
       }
 
@@ -1012,7 +1033,7 @@ function renderTable() {
             ${custHtml}
           </div>
         </td>
-        <td class="center" style="padding:0; vertical-align:top;">
+        <td class="center" style="padding:0; vertical-align:middle;">
           <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
             ${gsmBfHtml}
           </div>
@@ -1021,7 +1042,7 @@ function renderTable() {
           ${r._match && r.combo_str ? `<div style="font-size:11px; color:var(--sub); margin-bottom:4px; font-weight:normal;">${r.combo_str}</div>` : ''}
           <div>${r._size || r.size}</div>
         </td>
-        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel} ${r._match ? 'sets' : 'reels'}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.shade || '-'}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${badge}</td>
       </tr>`;
