@@ -999,12 +999,11 @@ function renderTable() {
 
       if (r._match && r.comboData) {
         custHtml = r.comboData.map((c, i) => 
-          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer}</div>`
+          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.size}] (${r.reel})</div>`
         ).join('');
         
-        gsmBfHtml = r.comboData.map((c, i) => 
-          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.gsm} / ${c.bf}</div>`
-        ).join('');
+        // Render GSM / BF exactly once, vertically centered for the combo
+        gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
       }
 
       return `<tr class="${cls}">
