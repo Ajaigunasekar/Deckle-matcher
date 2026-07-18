@@ -680,16 +680,36 @@ function handleFile(input) {
           return key ? r[key] : null;
         };
 
-        // Removes text, commas, and spaces to safely read numbers
         let parseNumber = (val) => {
           if (typeof val === 'number') return val;
           if (!val) return 0;
           return parseFloat(String(val).replace(/[^\d.-]/g, '')) || 0;
         };
 
+        // Smart parser that splits "170/16" instead of squishing it
+        let parseField = (val, isGsm) => {
+           if (val === null || val === undefined) return 0;
+           let str = String(val);
+           if (str.includes('/')) {
+               let parts = str.split('/');
+               return parseNumber(isGsm ? parts[0] : parts[1]);
+           }
+           return parseNumber(str);
+        };
+
         let customer = getVal(['customer', 'name', 'client']) || 'Unknown';
-        let gsm = parseNumber(getVal(['gsm']));
-        let bf = parseNumber(getVal(['bf', 'b.f']));
+        
+        let gsmValRaw = getVal(['gsm/bf', 'gsmbf', 'gsm']);
+        let bfValRaw = getVal(['gsm/bf', 'gsmbf', 'bf', 'b.f']);
+        
+        // Fallback: If BF column is missing but GSM has "170/16", pull BF from there
+        if (!bfValRaw && gsmValRaw && String(gsmValRaw).includes('/')) {
+            bfValRaw = gsmValRaw;
+        }
+        
+        let gsm = parseField(gsmValRaw, true);
+        let bf = parseField(bfValRaw, false);
+        
         let size = parseNumber(getVal(['size', 'deckle', 'mm', 'cm']));
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let shade = getVal(['shade']) || '-';
