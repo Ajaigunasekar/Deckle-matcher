@@ -559,7 +559,7 @@
     </div>
     <table id="resultsTable" style="display:none;">
       <thead id="tableHead">
-        <!-- Will be dynamically managed via JS depending on view mode -->
+        <!-- Will be dynamically managed via JS -->
       </thead>
       <tbody id="tableBody"></tbody>
     </table>
@@ -583,11 +583,11 @@
       </div>
       <div class="input-row">
         <div class="field">
-          <label>Min Size (mm)</label>
+          <label>Min Size</label>
           <input type="number" id="newMin" placeholder="422" step="0.1">
         </div>
         <div class="field">
-          <label>Max Size (mm)</label>
+          <label>Max Size</label>
           <input type="number" id="newMax" placeholder="435" step="0.1">
         </div>
       </div>
@@ -663,19 +663,31 @@ function handleFile(input) {
         rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
       }
 
-      // Safe key-matching strategy to parse column variants cleanly
-      allRows = rows.map(r => {
-        let normalized = {};
-        Object.keys(r).forEach(k => { normalized[k.trim().toLowerCase().replace(/[\s_]/g, '')] = r[k]; });
+      // ── ROBUST COLUMN MATCHING ──
+      allRows = rows.map((r, index) => {
+        let rowStrKeys = Object.keys(r);
         
-        let customer = normalized['customer'] || normalized['customername'] || normalized['name'] || 'Unknown';
-        let gsm = parseFloat(normalized['gsm']) || 0;
-        let bf = parseFloat(normalized['bf']) || 0;
-        let size = parseFloat(normalized['size']) || 0;
-        let reel = parseFloat(normalized['reel'] || normalized['reels'] || normalized['noofreels'] || normalized['qty']) || 0;
-        let shade = normalized['shade'] || '-';
+        let getVal = (keywords) => {
+          let key = rowStrKeys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+          return key ? r[key] : null;
+        };
+
+        // Removes text, commas, and spaces to safely read numbers like "200 cm" or "1,200"
+        let parseNumber = (val) => {
+          if (typeof val === 'number') return val;
+          if (!val) return 0;
+          return parseFloat(String(val).replace(/[^\d.-]/g, '')) || 0;
+        };
+
+        let customer = getVal(['customer', 'name', 'client']) || 'Unknown';
+        let gsm = parseNumber(getVal(['gsm']));
+        let bf = parseNumber(getVal(['bf', 'b.f']));
+        let size = parseNumber(getVal(['size', 'deckle', 'mm', 'cm']));
+        let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
+        let shade = getVal(['shade']) || '-';
         
-        return { customer, gsm, bf, size, reel, shade };
+        // Inject unique ID so we can track exactly which specific row gets used
+        return { id: index, customer, gsm, bf, size, reel, shade };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       matchRows = [];
@@ -687,7 +699,7 @@ function handleFile(input) {
       document.getElementById('emptyState').style.display = 'none';
       document.getElementById('resultsTable').style.display = 'none';
       document.getElementById('statsBar').style.display = 'none';
-      toast(`✓ Loaded ${allRows.length} orders`);
+      toast(`✓ Loaded ${allRows.length} valid orders`);
       
       document.querySelector('.main').classList.remove('sidebar-hidden');
     } catch(err) {
@@ -712,7 +724,7 @@ function runMatch() {
   allRows.forEach(row => {
     let key = `${row.gsm}`; 
     if (!groups[key]) groups[key] = [];
-    groups[key].push(JSON.parse(JSON.stringify(row))); // deep clone to handle assignments cleanly
+    groups[key].push(row); 
   });
 
   // 2. Recursive Combination Finder (1 to 5 orders)
@@ -762,20 +774,20 @@ function runMatch() {
     }
   });
 
-  // 3. Keep track of unmatched single records for calculations
   let matchedCombos = [...matchRows]; 
   
-  // A record is truly unmatched if it didn't participate in any successful combination setup
+  // Track IDs to know exactly which records were utilized in ANY combination
   let matchedInstances = new Set();
   matchedCombos.forEach(c => {
     c.comboData.forEach(item => {
-      matchedInstances.add(`${item.customer}_${item.gsm}_${item.bf}_${item.size}`);
+      matchedInstances.add(item.id);
     });
   });
 
   let unMatched = allRows.map(r => {
-    let isUsed = matchedInstances.has(`${r.customer}_${r.gsm}_${r.bf}_${r.size}`);
+    let isUsed = matchedInstances.has(r.id);
     return {
+      id: r.id,
       customer: r.customer,
       gsm: r.gsm,
       bf: r.bf,
@@ -790,7 +802,6 @@ function runMatch() {
   matchRows = [...matchedCombos, ...unMatched];
 
   const nMatch = matchedCombos.length;
-  // Calculate distinct items that found no arrangement option
   const nNo    = unMatched.filter(r => r._trulyUnused).length;
 
   document.getElementById('statMatch').textContent = nMatch;
@@ -814,20 +825,20 @@ function showRemaining() {
   
   isRemainingMode = true;
   
-  // Highlight no active pill matching this custom view screen
+  // Clear Active Filter Pills since this is a unique view
   document.querySelectorAll('.pills .pill').forEach(p => p.className = 'pill');
   
-  // Identify remaining items that couldn't fit any valid combination
+  // Find everything that never appeared in a successful combination
   let matchedInstances = new Set();
   matchRows.filter(r => r._match).forEach(c => {
     c.comboData.forEach(item => {
-      matchedInstances.add(`${item.customer}_${item.gsm}_${item.bf}_${item.size}`);
+      matchedInstances.add(item.id);
     });
   });
   
-  viewRows = allRows.filter(r => !matchedInstances.has(`${r.customer}_${r.gsm}_${r.bf}_${r.size}`));
+  viewRows = allRows.filter(r => !matchedInstances.has(r.id));
   
-  // Default Sort remaining layout by GSM descending
+  // Sort remaining view logically by GSM then BF
   viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
   
   renderTable();
@@ -855,18 +866,18 @@ function setFilter(f) {
 function applyFilter(f) {
   if (f === 'match')   viewRows = matchRows.filter(r => r._match);
   else if (f === 'nomatch') {
-    // Show single records that were completely skipped by optimization passes
     let matchedInstances = new Set();
     matchRows.filter(r => r._match).forEach(c => {
       c.comboData.forEach(item => {
-        matchedInstances.add(`${item.customer}_${item.gsm}_${item.bf}_${item.size}`);
+        matchedInstances.add(item.id);
       });
     });
-    viewRows = matchRows.filter(r => !r._match && !matchedInstances.has(`${r.customer}_${r.gsm}_${r.bf}_${r.size}`));
+    viewRows = matchRows.filter(r => !r._match && !matchedInstances.has(r.id));
   }
   else viewRows = [...matchRows];
   
   if (f === 'match') {
+    // Prioritize by Sets descending, then combined size
     viewRows.sort((a, b) => {
       if (b.reel !== a.reel) return b.reel - a.reel; 
       return b._size - a._size; 
@@ -874,6 +885,7 @@ function applyFilter(f) {
   } else {
     viewRows.sort((a, b) => b._size - a._size);
   }
+  
   renderTable();
 }
 
@@ -883,10 +895,9 @@ function sortTable(key) {
   else { sortKey = key; sortAsc = true; }
 
   document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
-  
   let headerCells = document.querySelectorAll('thead th');
-  if(headerCells.length > 0) {
-    let clickedHeader = Array.from(headerCells).find(th => th.getAttribute('onclick').includes(key));
+  if (headerCells.length > 0) {
+    let clickedHeader = Array.from(headerCells).find(th => th.getAttribute('onclick') && th.getAttribute('onclick').includes(key));
     if(clickedHeader) clickedHeader.classList.add('sorted');
   }
 
@@ -917,31 +928,32 @@ function renderTable() {
     return;
   }
 
-  // Manage table header template switch cleanly based on the feature selected
+  // Handle header template switching for Remaining view
   if (isRemainingMode) {
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('bf')">BF <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('size')">Size (mm) <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
     </tr>`;
 
     tbody.innerHTML = viewRows.map(r => `<tr class="row-nomatch">
-      <td class="customer">${r.customer}</td>
-      <td class="center">${r.gsm}</td>
-      <td class="center">${r.bf}</td>
-      <td class="size-val center">${r.size}</td>
-      <td class="center">${r.reel} reels</td>
-      <td class="center">${r.shade}</td>
+      <td class="customer" style="padding:13px 14px;">${r.customer}</td>
+      <td class="center" style="padding:13px 14px;">${r.gsm}</td>
+      <td class="center" style="padding:13px 14px;">${r.bf}</td>
+      <td class="size-val center" style="padding:13px 14px;">${r.size}</td>
+      <td class="center" style="padding:13px 14px;">${r.reel} reels</td>
+      <td class="center" style="padding:13px 14px;">${r.shade || '-'}</td>
     </tr>`).join('');
+    
   } else {
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('bf')">BF <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('size')">Size (mm) <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('size')">Combined Size <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
       <th class="center">Status</th>
@@ -989,7 +1001,7 @@ function renderTable() {
         </td>
         <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
           ${r._match && r.combo_str ? `<div style="font-size:11px; color:var(--sub); margin-bottom:4px; font-weight:normal;">${r.combo_str}</div>` : ''}
-          <div>${r._size}</div>
+          <div>${r._size || r.size}</div>
         </td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel} ${r._match ? 'sets' : 'reels'}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.shade || '-'}</td>
