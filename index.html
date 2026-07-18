@@ -304,25 +304,6 @@
   td.size-val { font-family: var(--mono); font-size: 15px; font-weight: bold; }
   td.center { text-align: center; }
 
-  /* Status badge */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    white-space: nowrap;
-  }
-  .badge-match   { background: rgba(62,207,142,0.12); color: var(--green); border: 1px solid rgba(62,207,142,0.25); }
-  .badge-nomatch { background: rgba(224,92,106,0.12); color: var(--red);   border: 1px solid rgba(224,92,106,0.25); }
-
-  /* Row highlight */
-  tr.row-match   td.size-val { color: var(--green); }
-  tr.row-nomatch td.size-val { color: var(--red); }
-
   /* ── Empty / placeholder ── */
   .empty {
     display: flex;
@@ -525,26 +506,18 @@
   <!-- Stats bar -->
   <div class="stats-bar" id="statsBar" style="display:none;">
     <div class="stat">
+      <div class="stat-dot" style="background:var(--accent)"></div>
+      <div>
+        <div class="stat-val" id="statTotalTons" style="color:var(--accent)">0.000</div>
+        <div class="stat-lbl">Total Tons</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
       <div class="stat-dot" style="background:var(--green)"></div>
       <div>
-        <div class="stat-val" id="statMatch" style="color:var(--green)">0</div>
-        <div class="stat-lbl">Matched Combos</div>
-      </div>
-    </div>
-    <div class="stat-divider"></div>
-    <div class="stat">
-      <div class="stat-dot" style="background:var(--red)"></div>
-      <div>
-        <div class="stat-val" id="statNo" style="color:var(--red)">0</div>
-        <div class="stat-lbl">No Match</div>
-      </div>
-    </div>
-    <div class="stat-divider"></div>
-    <div class="stat">
-      <div class="stat-dot" style="background:var(--sub)"></div>
-      <div>
-        <div class="stat-val" id="statTotal">0</div>
-        <div class="stat-lbl">Total Orders</div>
+        <div class="stat-val" id="statTotalSets" style="color:var(--green)">0</div>
+        <div class="stat-lbl">Total Sets / Reels</div>
       </div>
     </div>
     <div class="deckle-info" id="deckleInfo"></div>
@@ -735,7 +708,7 @@ function handleFile(input) {
   reader.readAsArrayBuffer(file);
 }
 
-// ── Run match (Inventory Deduction Algorithm) ──────────────────────────────
+// ── Run match (Inventory Deduction Algorithm + Tons) ──────────────────────
 function runMatch() {
   if (!allRows.length) { toast('Please upload a file first', true); return; }
   const idx  = parseInt(document.getElementById('deckleSelect').value);
@@ -845,6 +818,7 @@ function runMatch() {
           combo_str: sizeEquation,
           reel: sets, 
           shade: bestCombo[0].shade,
+          tons: (totalSize / 2.54 * 12.2 * sets) / 1000,
           _match: true
         });
       } else {
@@ -863,6 +837,7 @@ function runMatch() {
            unMatched.push({
               ...item,
               _size: item.size,
+              tons: (item.size / 2.54 * 12.2 * item.reel) / 1000,
               _match: false
            });
         }
@@ -871,12 +846,6 @@ function runMatch() {
 
   matchRows = [...matchedCombos, ...unMatched];
 
-  const nMatch = matchedCombos.length;
-  const nNo    = unMatched.length;
-
-  document.getElementById('statMatch').textContent = nMatch;
-  document.getElementById('statNo').textContent    = nNo;
-  document.getElementById('statTotal').textContent = allRows.length;
   document.getElementById('deckleInfo').innerHTML  =
     `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
   document.getElementById('statsBar').style.display = 'flex';
@@ -977,8 +946,17 @@ function renderTable() {
     empty.querySelector('.empty-title').textContent = 'No orders to show';
     empty.querySelector('.empty-sub').textContent   = 'Try a different filter or deckle range.';
     document.getElementById('remainingActions').style.display = 'none';
+    
+    document.getElementById('statTotalTons').textContent = "0.000";
+    document.getElementById('statTotalSets').textContent = "0";
     return;
   }
+  
+  // Dynamically calculate Stats based on active view
+  let sumTons = viewRows.reduce((sum, r) => sum + (r.tons || 0), 0);
+  let sumSets = viewRows.reduce((sum, r) => sum + (r.reel || 0), 0);
+  document.getElementById('statTotalTons').textContent = sumTons.toFixed(3);
+  document.getElementById('statTotalSets').textContent = sumSets;
   
   document.getElementById('remainingActions').style.display = isRemainingMode ? 'block' : 'none';
 
@@ -989,6 +967,7 @@ function renderTable() {
       <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Remaining Reels <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
+      <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
 
     tbody.innerHTML = viewRows.map(r => `<tr class="row-nomatch">
@@ -997,6 +976,7 @@ function renderTable() {
       <td class="size-val center" style="padding:13px 14px;">${r.size}</td>
       <td class="center" style="padding:13px 14px;">${r.reel}</td>
       <td class="center" style="padding:13px 14px;">${r.shade || '-'}</td>
+      <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
     </tr>`).join('');
     
   } else {
@@ -1006,14 +986,11 @@ function renderTable() {
       <th class="center" onclick="sortTable('size')">Combined Size <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Sets <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
-      <th class="center">Status</th>
+      <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
 
     tbody.innerHTML = viewRows.map(r => {
       const cls   = r._match ? 'row-match' : 'row-nomatch';
-      const badge = r._match
-        ? `<span class="badge badge-match">✔ Matched</span>`
-        : `<span class="badge badge-nomatch">✕ No Match</span>`;
       
       let custHtml = `<div style="padding:13px 14px;">${r.customer}</div>`;
       let gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
@@ -1023,7 +1000,6 @@ function renderTable() {
           `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.size}] (${r.reel})</div>`
         ).join('');
         
-        // Single, perfectly centered GSM/BF representation
         gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
       }
 
@@ -1044,7 +1020,7 @@ function renderTable() {
         </td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.shade || '-'}</td>
-        <td class="center" style="vertical-align:middle; padding:13px 14px;">${badge}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
       </tr>`;
     }).join('');
   }
