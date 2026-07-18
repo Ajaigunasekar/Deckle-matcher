@@ -49,7 +49,7 @@
     top: 0;
     z-index: 100;
   }
-  .header-left { display: flex; align-items: baseline; gap: 12px; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
   .logo {
     font-family: var(--mono);
     font-size: 22px;
@@ -61,6 +61,7 @@
     font-family: var(--mono);
     font-size: 10px;
     color: var(--sub);
+    margin-top: 4px;
   }
   .btn-icon {
     background: var(--card);
@@ -76,6 +77,12 @@
     min-height: 44px;
   }
   .btn-icon:active { background: var(--border); }
+  
+  /* Sidebar Toggle Button Specifics */
+  .sidebar-toggle {
+    font-size: 18px;
+    padding: 8px 12px;
+  }
 
   /* ── Main layout ── */
   .main {
@@ -83,6 +90,11 @@
     grid-template-columns: 280px 1fr;
     grid-template-rows: auto 1fr;
     height: calc(100vh - 64px);
+    transition: grid-template-columns 0.3s ease;
+  }
+  
+  .main.sidebar-hidden {
+    grid-template-columns: 0 1fr;
   }
 
   /* ── Sidebar ── */
@@ -94,8 +106,19 @@
     flex-direction: column;
     gap: 24px;
     overflow-y: auto;
+    overflow-x: hidden;
     grid-row: 1 / 3;
+    transition: all 0.3s ease;
   }
+  
+  .main.sidebar-hidden .sidebar {
+    padding-left: 0;
+    padding-right: 0;
+    opacity: 0;
+    visibility: hidden;
+    border-right: none;
+  }
+
   .sec-label {
     font-family: var(--mono);
     font-size: 9px;
@@ -426,6 +449,9 @@
   /* ── Responsive: phone / portrait iPad ── */
   @media (max-width: 768px) {
     .main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; height: auto; }
+    .main.sidebar-hidden .sidebar {
+      display: none;
+    }
     .sidebar {
       grid-row: auto;
       border-right: none;
@@ -448,8 +474,11 @@
 <!-- Header -->
 <div class="header">
   <div class="header-left">
-    <div class="logo">⬡ DECKLE MATCH</div>
-    <div class="logo-sub">Order Size Matcher</div>
+    <button class="btn-icon sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div>
+      <div class="logo">⬡ DECKLE MATCH</div>
+      <div class="logo-sub">Order Size Matcher</div>
+    </div>
   </div>
   <button class="btn-icon" onclick="openModal()">⚙ Manage Deckles</button>
 </div>
@@ -583,6 +612,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+// ── Sidebar Toggle Logic ───────────────────────────────────────────────────
+function toggleSidebar() {
+  document.querySelector('.main').classList.toggle('sidebar-hidden');
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 let rules = JSON.parse(localStorage.getItem('deckleRules') || 'null') || [
   { name: "Deckle 422-435", min: 422, max: 435 }
@@ -660,6 +694,9 @@ function handleFile(input) {
       document.getElementById('resultsTable').style.display = 'none';
       document.getElementById('statsBar').style.display = 'none';
       toast(`✓ Loaded ${allRows.length} orders`);
+      
+      // Automatically expand sidebar when a file is uploaded (just in case it was hidden)
+      document.querySelector('.main').classList.remove('sidebar-hidden');
     } catch(err) {
       toast('Error reading file: ' + err.message, true);
     }
@@ -667,7 +704,7 @@ function handleFile(input) {
   reader.readAsArrayBuffer(file);
 }
 
-// ── Run match (Combination Logic to Output Image Format) ──────────────────
+// ── Run match (Advanced Combination Logic) ────────────────────────────────
 function runMatch() {
   if (!allRows.length) { toast('Please upload a file first', true); return; }
   const idx  = parseInt(document.getElementById('deckleSelect').value);
@@ -676,31 +713,60 @@ function runMatch() {
 
   matchRows = [];
   
-  // 1. Group by GSM and BF
+  // 1. Group strictly by GSM
   let groups = {};
   allRows.forEach(row => {
     if (!row.size || !row.reel) return; 
-    let key = `${row.gsm}_${row.bf}`;
+    let key = `${row.gsm}`; 
     if (!groups[key]) groups[key] = [];
     groups[key].push(row);
   });
 
-  // 2. Evaluate combinations (1, 2, 3, or 4 customers)
+  // 2. Recursive Combination Finder (1 to 5 orders)
   Object.keys(groups).forEach(key => {
     let items = groups[key];
-    let n = items.length;
 
-    for (let i = 0; i < n; i++) {
-      checkCombo([items[i]], rule); 
-      for (let j = i + 1; j < n; j++) {
-        checkCombo([items[i], items[j]], rule); 
-        for (let k = j + 1; k < n; k++) {
-          checkCombo([items[i], items[j], items[k]], rule); 
-          for (let l = k + 1; l < n; l++) {
-            checkCombo([items[i], items[j], items[k], items[l]], rule); 
-          }
-        }
+    function findCombos(startIndex, currentCombo, currentSize, minBf, maxBf) {
+      // Check if current combination size fits the deckle rule
+      if (currentSize >= rule.min && currentSize <= rule.max) {
+        let minReels = Math.min(...currentCombo.map(item => item.reel));
+        let sizeEquation = currentCombo.length > 1 
+          ? currentCombo.map(c => c.size).join(' + ')
+          : '';
+
+        matchRows.push({
+          comboData: [...currentCombo], // Pass the array of original objects to build the bordered rows
+          customer: currentCombo.map(c => c.customer).join(', '),
+          gsm: currentCombo[0].gsm,
+          bf: currentCombo[0].bf,
+          _size: currentSize,
+          combo_str: sizeEquation,
+          reel: minReels, 
+          shade: currentCombo[0].shade,
+          _match: true
+        });
       }
+      
+      if (currentCombo.length >= 5) return;
+
+      for (let i = startIndex; i < items.length; i++) {
+        let item = items[i];
+        let newSize = currentSize + item.size;
+        
+        if (newSize > rule.max) continue;
+
+        let newMinBf = Math.min(minBf, item.bf);
+        let newMaxBf = Math.max(maxBf, item.bf);
+        if (newMaxBf - newMinBf > 2) continue;
+
+        currentCombo.push(item);
+        findCombos(i + 1, currentCombo, newSize, newMinBf, newMaxBf);
+        currentCombo.pop();
+      }
+    }
+
+    for (let i = 0; i < items.length; i++) {
+      findCombos(i + 1, [items[i]], items[i].size, items[i].bf, items[i].bf);
     }
   });
 
@@ -708,11 +774,9 @@ function runMatch() {
   let matchedCombos = [...matchRows]; 
   let unMatched = allRows.map(r => ({
     customer: r.customer,
-    display_customer: r.customer, // Fallback for unmatched
     gsm: r.gsm,
     bf: r.bf,
     _size: r.size,
-    display_size: r.size, // Normal size format for unmatched
     reel: r.reel,
     shade: r.shade,
     _match: false 
@@ -730,31 +794,12 @@ function runMatch() {
     `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
   document.getElementById('statsBar').style.display = 'flex';
 
-  applyFilter(currentFilter);
-}
-
-function checkCombo(combo, rule) {
-  let totalSize = combo.reduce((sum, item) => sum + item.size, 0);
+  currentFilter = 'match';
+  setFilter('match');
   
-  if (totalSize >= rule.min && totalSize <= rule.max) {
-    let minReels = Math.min(...combo.map(item => item.reel));
-    
-    // Check if it's a single order or combination to format the size equation correctly
-    let sizeEquation = combo.length > 1 
-      ? combo.map(c => c.size).join('+') + '=' + totalSize 
-      : totalSize;
-
-    matchRows.push({
-      customer: combo.map(c => c.customer).join(', '), // Used for pure sorting logic
-      display_customer: combo.map(c => c.customer).join('<br>'), // HTML string to stack names vertically like the image
-      gsm: combo[0].gsm,
-      bf: combo[0].bf,
-      _size: totalSize, // Used for numerical sorting logic
-      display_size: sizeEquation, // Outputs "200+100+125=425" like the image
-      reel: minReels, 
-      shade: combo[0].shade,
-      _match: true
-    });
+  // Auto-collapse sidebar after running match to reveal table space
+  if(window.innerWidth > 768) {
+    document.querySelector('.main').classList.add('sidebar-hidden');
   }
 }
 
@@ -777,8 +822,10 @@ function applyFilter(f) {
   else if (f === 'nomatch') viewRows = matchRows.filter(r => !r._match);
   else viewRows = [...matchRows];
   
-  // Sort combined sizes to top by default
-  viewRows.sort((a, b) => b._size - a._size);
+  viewRows.sort((a, b) => {
+    if (b.reel !== a.reel) return b.reel - a.reel; 
+    return b._size - a._size; 
+  });
   renderTable();
 }
 
@@ -824,15 +871,48 @@ function renderTable() {
       ? `<span class="badge badge-match">✔ Matched</span>`
       : `<span class="badge badge-nomatch">✕ No Match</span>`;
     
-    // Injecting the custom formatted strings (display_customer and display_size) directly into your original UI
+    // Create the inner line separators for Customer, GSM, and BF
+    let custHtml = `<div style="padding:13px 14px;">${r.customer}</div>`;
+    let gsmHtml = `<div style="padding:13px 14px;">${r.gsm}</div>`;
+    let bfHtml = `<div style="padding:13px 14px;">${r.bf}</div>`;
+
+    if (r._match && r.comboData) {
+      custHtml = r.comboData.map((c, i) => 
+        `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer}</div>`
+      ).join('');
+      
+      gsmHtml = r.comboData.map((c, i) => 
+        `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.gsm}</div>`
+      ).join('');
+      
+      bfHtml = r.comboData.map((c, i) => 
+        `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.bf}</div>`
+      ).join('');
+    }
+
     return `<tr class="${cls}">
-      <td class="customer" style="line-height:1.6;">${r.display_customer}</td>
-      <td class="center">${r.gsm}</td>
-      <td class="center">${r.bf}</td>
-      <td class="size-val center">${r.display_size}</td>
-      <td class="center">${r.reel} sets</td>
-      <td class="center">${r.shade}</td>
-      <td class="center">${badge}</td>
+      <td class="customer" style="padding:0; vertical-align:top;">
+        <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+          ${custHtml}
+        </div>
+      </td>
+      <td class="center" style="padding:0; vertical-align:top;">
+        <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+          ${gsmHtml}
+        </div>
+      </td>
+      <td class="center" style="padding:0; vertical-align:top;">
+        <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+          ${bfHtml}
+        </div>
+      </td>
+      <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
+        ${r._match && r.combo_str ? `<div style="font-size:11px; color:var(--sub); margin-bottom:4px; font-weight:normal;">${r.combo_str}</div>` : ''}
+        <div>${r._size}</div>
+      </td>
+      <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
+      <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.shade || '-'}</td>
+      <td class="center" style="vertical-align:middle; padding:13px 14px;">${badge}</td>
     </tr>`;
   }).join('');
 
@@ -851,6 +931,9 @@ function clearAll() {
   document.getElementById('emptyState').style.display = 'flex';
   document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
   document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file and tap Run Match to begin.';
+  
+  // Bring sidebar back if it was hidden
+  document.querySelector('.main').classList.remove('sidebar-hidden');
   toast('Cleared');
 }
 
