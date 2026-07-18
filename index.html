@@ -557,6 +557,14 @@
       <div class="empty-title">No data loaded</div>
       <div class="empty-sub">Upload your Excel file and tap Run Match to begin.</div>
     </div>
+    
+    <!-- Dynamic Back Button for Remaining View -->
+    <div id="remainingActions" style="display:none; margin-bottom: 16px;">
+      <button class="btn-secondary" onclick="runMatch()" style="width: auto; display: inline-flex; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold;">
+        ⬅ Back to Matches
+      </button>
+    </div>
+
     <table id="resultsTable" style="display:none;">
       <thead id="tableHead">
         <!-- Will be dynamically managed via JS -->
@@ -672,7 +680,7 @@ function handleFile(input) {
           return key ? r[key] : null;
         };
 
-        // Removes text, commas, and spaces to safely read numbers like "200 cm" or "1,200"
+        // Removes text, commas, and spaces to safely read numbers
         let parseNumber = (val) => {
           if (typeof val === 'number') return val;
           if (!val) return 0;
@@ -698,6 +706,7 @@ function handleFile(input) {
       document.getElementById('uploadZone').style.display = 'none';
       document.getElementById('emptyState').style.display = 'none';
       document.getElementById('resultsTable').style.display = 'none';
+      document.getElementById('remainingActions').style.display = 'none';
       document.getElementById('statsBar').style.display = 'none';
       toast(`✓ Loaded ${allRows.length} valid orders`);
       
@@ -925,15 +934,17 @@ function renderTable() {
     empty.style.display = 'flex';
     empty.querySelector('.empty-title').textContent = 'No orders to show';
     empty.querySelector('.empty-sub').textContent   = 'Try a different filter or deckle range.';
+    document.getElementById('remainingActions').style.display = 'none';
     return;
   }
+  
+  document.getElementById('remainingActions').style.display = isRemainingMode ? 'block' : 'none';
 
-  // Handle header template switching for Remaining view
+  // Handle header template switching with Merged GSM / BF
   if (isRemainingMode) {
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('gsm')">GSM <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('bf')">BF <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
@@ -941,8 +952,7 @@ function renderTable() {
 
     tbody.innerHTML = viewRows.map(r => `<tr class="row-nomatch">
       <td class="customer" style="padding:13px 14px;">${r.customer}</td>
-      <td class="center" style="padding:13px 14px;">${r.gsm}</td>
-      <td class="center" style="padding:13px 14px;">${r.bf}</td>
+      <td class="center" style="padding:13px 14px;">${r.gsm} / ${r.bf}</td>
       <td class="size-val center" style="padding:13px 14px;">${r.size}</td>
       <td class="center" style="padding:13px 14px;">${r.reel} reels</td>
       <td class="center" style="padding:13px 14px;">${r.shade || '-'}</td>
@@ -951,8 +961,7 @@ function renderTable() {
   } else {
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('gsm')">GSM <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('bf')">BF <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Combined Size <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Reel <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
@@ -966,20 +975,15 @@ function renderTable() {
         : `<span class="badge badge-nomatch">✕ No Match</span>`;
       
       let custHtml = `<div style="padding:13px 14px;">${r.customer}</div>`;
-      let gsmHtml = `<div style="padding:13px 14px;">${r.gsm}</div>`;
-      let bfHtml = `<div style="padding:13px 14px;">${r.bf}</div>`;
+      let gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
 
       if (r._match && r.comboData) {
         custHtml = r.comboData.map((c, i) => 
           `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer}</div>`
         ).join('');
         
-        gsmHtml = r.comboData.map((c, i) => 
-          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.gsm}</div>`
-        ).join('');
-        
-        bfHtml = r.comboData.map((c, i) => 
-          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.bf}</div>`
+        gsmBfHtml = r.comboData.map((c, i) => 
+          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.gsm} / ${c.bf}</div>`
         ).join('');
       }
 
@@ -991,12 +995,7 @@ function renderTable() {
         </td>
         <td class="center" style="padding:0; vertical-align:top;">
           <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
-            ${gsmHtml}
-          </div>
-        </td>
-        <td class="center" style="padding:0; vertical-align:top;">
-          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
-            ${bfHtml}
+            ${gsmBfHtml}
           </div>
         </td>
         <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
@@ -1024,6 +1023,7 @@ function clearAll() {
   document.getElementById('resultsTable').style.display = 'none';
   document.getElementById('statsBar').style.display = 'none';
   document.getElementById('emptyState').style.display = 'flex';
+  document.getElementById('remainingActions').style.display = 'none';
   document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
   document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file and tap Run Match to begin.';
   
