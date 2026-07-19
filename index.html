@@ -550,14 +550,6 @@
   <!-- Stats bar -->
   <div class="stats-bar" id="statsBar" style="display:none;">
     <div class="stat">
-      <div class="stat-dot" style="background:var(--green)"></div>
-      <div>
-        <div class="stat-val" id="statMatchedTons" style="color:var(--green)">0.000</div>
-        <div class="stat-lbl">Matched Tons</div>
-      </div>
-    </div>
-    <div class="stat-divider"></div>
-    <div class="stat">
       <div class="stat-dot" style="background:var(--accent)"></div>
       <div>
         <div class="stat-val" id="statOrderTons" style="color:var(--accent)">0.000</div>
@@ -566,10 +558,26 @@
     </div>
     <div class="stat-divider"></div>
     <div class="stat">
+      <div class="stat-dot" style="background:var(--amber)"></div>
+      <div>
+        <div class="stat-val" id="statBalanceTons" style="color:var(--amber)">0.000</div>
+        <div class="stat-lbl">Balance Tons</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-dot" style="background:var(--green)"></div>
+      <div>
+        <div class="stat-val" id="statMatchedTons" style="color:var(--green)">0.000</div>
+        <div class="stat-lbl">Matched Tons</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
       <div class="stat-dot" style="background:var(--sub)"></div>
       <div>
         <div class="stat-val" id="statTotalSets">0</div>
-        <div class="stat-lbl">Total Sets / Reels</div>
+        <div class="stat-lbl">Total Sets</div>
       </div>
     </div>
     <div class="deckle-info" id="deckleInfo"></div>
@@ -1108,10 +1116,12 @@ function renderTable() {
       
       let activeRows = allRows.filter(r => r._selected !== false);
       let sumAllOrderTons = activeRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
+      let balanceTons = Math.max(0, sumAllOrderTons - sumMatchedTons);
       let currentViewSets = viewRows.reduce((sum, r) => sum + (r.reel || 0), 0);
       
-      document.getElementById('statMatchedTons').textContent = sumMatchedTons.toFixed(3);
       document.getElementById('statOrderTons').textContent = sumAllOrderTons.toFixed(3);
+      document.getElementById('statBalanceTons').textContent = balanceTons.toFixed(3);
+      document.getElementById('statMatchedTons').textContent = sumMatchedTons.toFixed(3);
       document.getElementById('statTotalSets').textContent = currentViewSets;
   }
 
@@ -1147,7 +1157,7 @@ function renderTable() {
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Sizes & Deckle <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('reel')">Sets / Reels <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">Sets <span class="sort-arrow">↕</span></th>
       <th class="center">Dia</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
@@ -1217,7 +1227,7 @@ function exportPDF() {
           body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
-          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets / Reels', 'Dia', 'Tons']];
+          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets', 'Dia', 'Tons']];
           
           body = viewRows.map(r => {
               let custStr = r.customer;
