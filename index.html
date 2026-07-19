@@ -1264,6 +1264,43 @@ function exportPDF() {
       });
 
       doc.save(`Deckle_Match_${title.replace(/\s+/g, '_')}.pdf`);
+      
+      // ── AUTO DELETE MATCHED ORDERS AFTER EXPORT ──
+      if (viewMode !== 'data') {
+          let matchedExists = false;
+          matchRows.filter(r => r._match).forEach(mRow => {
+              matchedExists = true;
+              let groupedCombo = {};
+              mRow.comboData.forEach(c => {
+                  if(!groupedCombo[c.id]) groupedCombo[c.id] = 0;
+                  groupedCombo[c.id] += 1;
+              });
+              
+              Object.keys(groupedCombo).forEach(idStr => {
+                  let id = parseInt(idStr);
+                  let consumedReels = groupedCombo[id] * mRow.reel;
+                  
+                  let target = allRows.find(row => row.id === id);
+                  if (target) {
+                      target.reel -= consumedReels;
+                  }
+              });
+          });
+
+          if (matchedExists) {
+              // Filter out completely consumed orders
+              allRows = allRows.filter(row => row.reel > 0);
+              
+              toast('✓ Exported & Matched Orders Removed');
+              
+              // Re-run the match automatically to show what's left
+              setTimeout(() => {
+                  runMatch();
+              }, 800);
+              return; // Stop here so we don't show the regular success toast
+          }
+      }
+      
       toast('✓ PDF Exported Successfully');
   } catch (e) {
       console.error(e);
