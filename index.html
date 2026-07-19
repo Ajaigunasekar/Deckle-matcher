@@ -234,6 +234,14 @@
     color: var(--accent);
     font-weight: bold;
   }
+  
+  .btn-danger-outline {
+    border-color: rgba(224,92,106,0.5); 
+    color: var(--red);
+  }
+  .btn-danger-outline:active {
+    background: rgba(224,92,106,0.1);
+  }
 
   /* ── Stats bar ── */
   .stats-bar {
@@ -317,21 +325,6 @@
   td.customer { font-weight: 500; }
   td.size-val { font-family: var(--mono); font-size: 15px; font-weight: bold; }
   td.center { text-align: center; }
-
-  /* Status badge */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    white-space: nowrap;
-  }
-  .badge-match   { background: rgba(62,207,142,0.12); color: var(--green); border: 1px solid rgba(62,207,142,0.25); }
-  .badge-nomatch { background: rgba(224,92,106,0.12); color: var(--red);   border: 1px solid rgba(224,92,106,0.25); }
 
   /* Row highlight overrides */
   tr.row-nomatch td.size-val { color: var(--red); }
@@ -542,6 +535,7 @@
       <button class="btn-secondary btn-data" onclick="showDataPage()">📋 MANAGE DATA</button>
       <button class="btn-primary" onclick="runMatch()">🔍 RUN MATCH</button>
       <button class="btn-secondary" onclick="exportPDF()">📄 EXPORT PDF</button>
+      <button class="btn-secondary btn-danger-outline" onclick="clearMatchedData()">🗑 CLEAR MATCHED</button>
       <button class="btn-secondary" onclick="clearAll()">✕ Clear All</button>
     </div>
 
@@ -1019,6 +1013,47 @@ function runMatch() {
   }
 }
 
+// ── Manual Matched Data Clear ──────────────────────────────────────────────
+function clearMatchedData() {
+  let matchedRows = matchRows.filter(r => r._match);
+  if (matchedRows.length === 0) {
+    toast('No matched data to clear.', true);
+    return;
+  }
+  
+  if (!confirm("Are you sure you want to remove the matched reels from inventory?")) return;
+
+  matchedRows.forEach(mRow => {
+      let groupedCombo = {};
+      mRow.comboData.forEach(c => {
+          if(!groupedCombo[c.id]) groupedCombo[c.id] = 0;
+          groupedCombo[c.id] += 1;
+      });
+      
+      Object.keys(groupedCombo).forEach(idStr => {
+          let id = parseInt(idStr);
+          let consumedReels = groupedCombo[id] * mRow.reel;
+          
+          let target = allRows.find(row => row.id === id);
+          if (target) {
+              target.reel -= consumedReels;
+          }
+      });
+  });
+
+  // Filter out completely consumed orders from master list
+  allRows = allRows.filter(row => row.reel > 0);
+  
+  toast('✓ Matched Orders Cleared');
+  
+  // Refresh view
+  if (viewMode === 'data') {
+      showDataPage();
+  } else {
+      runMatch();
+  }
+}
+
 // ── Filter ─────────────────────────────────────────────────────────────────
 function setFilter(f) {
   if(viewMode === 'data') return;
@@ -1264,43 +1299,6 @@ function exportPDF() {
       });
 
       doc.save(`Deckle_Match_${title.replace(/\s+/g, '_')}.pdf`);
-      
-      // ── AUTO DELETE MATCHED ORDERS AFTER EXPORT ──
-      if (viewMode !== 'data') {
-          let matchedExists = false;
-          matchRows.filter(r => r._match).forEach(mRow => {
-              matchedExists = true;
-              let groupedCombo = {};
-              mRow.comboData.forEach(c => {
-                  if(!groupedCombo[c.id]) groupedCombo[c.id] = 0;
-                  groupedCombo[c.id] += 1;
-              });
-              
-              Object.keys(groupedCombo).forEach(idStr => {
-                  let id = parseInt(idStr);
-                  let consumedReels = groupedCombo[id] * mRow.reel;
-                  
-                  let target = allRows.find(row => row.id === id);
-                  if (target) {
-                      target.reel -= consumedReels;
-                  }
-              });
-          });
-
-          if (matchedExists) {
-              // Filter out completely consumed orders
-              allRows = allRows.filter(row => row.reel > 0);
-              
-              toast('✓ Exported & Matched Orders Removed');
-              
-              // Re-run the match automatically to show what's left
-              setTimeout(() => {
-                  runMatch();
-              }, 800);
-              return; // Stop here so we don't show the regular success toast
-          }
-      }
-      
       toast('✓ PDF Exported Successfully');
   } catch (e) {
       console.error(e);
