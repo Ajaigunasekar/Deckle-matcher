@@ -301,7 +301,7 @@
     vertical-align: middle;
   }
   td.customer { font-weight: 500; }
-  td.size-val { font-family: var(--mono); font-size: 15px; }
+  td.size-val { font-family: var(--mono); font-size: 15px; font-weight: bold; }
   td.center { text-align: center; }
 
   /* Status badge */
@@ -1026,10 +1026,22 @@ function renderTable() {
       let gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
 
       if (r._match && r.comboData) {
-        custHtml = r.comboData.map((c, i) => 
-          `<div style="padding:13px 14px; ${i < r.comboData.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.size}] (${r.reel})</div>`
-        ).join('');
+        // Group exactly identical items in the combo
+        let groupedCombo = {};
+        r.comboData.forEach(c => {
+          if(!groupedCombo[c.id]) {
+            groupedCombo[c.id] = { ...c, count: 0 };
+          }
+          groupedCombo[c.id].count += 1;
+        });
+        let uniqueItems = Object.values(groupedCombo);
+
+        custHtml = uniqueItems.map((c, i) => {
+          let totalReelsUsedInCombo = c.count * r.reel;
+          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.size}] (${totalReelsUsedInCombo})</div>`;
+        }).join('');
         
+        // Single, perfectly centered GSM/BF representation
         gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
       }
 
