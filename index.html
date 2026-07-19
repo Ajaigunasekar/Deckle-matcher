@@ -244,7 +244,7 @@
   }
   .stat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .stat-val { font-family: var(--mono); font-size: 18px; font-weight: bold; }
-  .stat-lbl { font-size: 11px; color: var(--sub); }
+  .stat-lbl { font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.5px; }
   .stat-divider { width: 1px; height: 28px; background: var(--border); }
   .deckle-info {
     margin-left: auto;
@@ -301,8 +301,26 @@
     vertical-align: middle;
   }
   td.customer { font-weight: 500; }
-  td.size-val { font-family: var(--mono); font-size: 15px; font-weight: bold; }
+  td.size-val { font-family: var(--mono); font-size: 15px; }
   td.center { text-align: center; }
+
+  /* Status badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .badge-match   { background: rgba(62,207,142,0.12); color: var(--green); border: 1px solid rgba(62,207,142,0.25); }
+  .badge-nomatch { background: rgba(224,92,106,0.12); color: var(--red);   border: 1px solid rgba(224,92,106,0.25); }
+
+  /* Row highlight overrides */
+  tr.row-nomatch td.size-val { color: var(--red); }
 
   /* ── Empty / placeholder ── */
   .empty {
@@ -506,17 +524,25 @@
   <!-- Stats bar -->
   <div class="stats-bar" id="statsBar" style="display:none;">
     <div class="stat">
-      <div class="stat-dot" style="background:var(--accent)"></div>
+      <div class="stat-dot" style="background:var(--green)"></div>
       <div>
-        <div class="stat-val" id="statTotalTons" style="color:var(--accent)">0.000</div>
-        <div class="stat-lbl">Total Tons</div>
+        <div class="stat-val" id="statMatchedTons" style="color:var(--green)">0.000</div>
+        <div class="stat-lbl">Matched Tons</div>
       </div>
     </div>
     <div class="stat-divider"></div>
     <div class="stat">
-      <div class="stat-dot" style="background:var(--green)"></div>
+      <div class="stat-dot" style="background:var(--accent)"></div>
       <div>
-        <div class="stat-val" id="statTotalSets" style="color:var(--green)">0</div>
+        <div class="stat-val" id="statOrderTons" style="color:var(--accent)">0.000</div>
+        <div class="stat-lbl">Total Order Tons</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-dot" style="background:var(--sub)"></div>
+      <div>
+        <div class="stat-val" id="statTotalSets">0</div>
         <div class="stat-lbl">Total Sets / Reels</div>
       </div>
     </div>
@@ -947,16 +973,20 @@ function renderTable() {
     empty.querySelector('.empty-sub').textContent   = 'Try a different filter or deckle range.';
     document.getElementById('remainingActions').style.display = 'none';
     
-    document.getElementById('statTotalTons').textContent = "0.000";
+    document.getElementById('statMatchedTons').textContent = "0.000";
+    document.getElementById('statOrderTons').textContent = "0.000";
     document.getElementById('statTotalSets').textContent = "0";
     return;
   }
   
-  // Dynamically calculate Stats based on active view
-  let sumTons = viewRows.reduce((sum, r) => sum + (r.tons || 0), 0);
-  let sumSets = viewRows.reduce((sum, r) => sum + (r.reel || 0), 0);
-  document.getElementById('statTotalTons').textContent = sumTons.toFixed(3);
-  document.getElementById('statTotalSets').textContent = sumSets;
+  // Dynamically calculate Global Stats
+  let sumMatchedTons = matchRows.filter(r => r._match).reduce((sum, r) => sum + (r.tons || 0), 0);
+  let sumAllOrderTons = allRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
+  let currentViewSets = viewRows.reduce((sum, r) => sum + (r.reel || 0), 0);
+  
+  document.getElementById('statMatchedTons').textContent = sumMatchedTons.toFixed(3);
+  document.getElementById('statOrderTons').textContent = sumAllOrderTons.toFixed(3);
+  document.getElementById('statTotalSets').textContent = currentViewSets;
   
   document.getElementById('remainingActions').style.display = isRemainingMode ? 'block' : 'none';
 
@@ -983,7 +1013,7 @@ function renderTable() {
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('size')">Combined Size <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('size')">Sizes & Deckle <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Sets <span class="sort-arrow">↕</span></th>
       <th class="center">Shade</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
@@ -1015,8 +1045,8 @@ function renderTable() {
           </div>
         </td>
         <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
-          ${r._match && r.combo_str ? `<div style="font-size:11px; color:var(--sub); margin-bottom:4px; font-weight:normal;">${r.combo_str}</div>` : ''}
-          <div>${r._size || r.size}</div>
+          ${r._match && r.combo_str ? `<div style="font-size:14px; color:var(--accent); margin-bottom:8px; font-weight:900; letter-spacing:0.5px; background:rgba(79,142,247,0.1); padding:6px 10px; border-radius:6px; display:inline-block; border: 1px solid rgba(79,142,247,0.3);">${r.combo_str}</div>` : ''}
+          <div style="font-size:16px; font-weight:bold; color:var(--green);">${r._size || r.size}</div>
         </td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.shade || '-'}</td>
