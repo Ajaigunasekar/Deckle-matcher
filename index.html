@@ -670,7 +670,7 @@ let viewRows  = [];
 let currentFilter = 'all';
 let sortKey   = null;
 let sortAsc   = true;
-let viewMode  = 'match'; // Can be 'match', 'data', or 'remaining' (unmatched view)
+let viewMode  = 'match'; // Can be 'match' or 'data'
 
 // ── Persist ────────────────────────────────────────────────────────────────
 function saveRules() {
@@ -959,7 +959,7 @@ function runMatch() {
           orig.reel -= (sets * itemCounts[id]);
         });
 
-        let sizeEquation = bestCombo.length > 1 ? bestCombo.map(c => c.size).join(' + ') : '';
+        let sizeEquation = bestCombo.length > 1 ? bestCombo.map(c => Number(c.size).toFixed(2)).join(' + ') : '';
         let totalSize = bestCombo.reduce((sum, c) => sum + c.size, 0);
 
         matchRows.push({
@@ -1135,7 +1135,7 @@ function renderTable() {
           </td>
           <td class="customer" style="padding:13px 14px;">${r.customer}</td>
           <td class="center" style="padding:13px 14px;">${r.gsm} / ${r.bf}</td>
-          <td class="size-val center" style="padding:13px 14px;">${r.size}</td>
+          <td class="size-val center" style="padding:13px 14px;">${Number(r.size).toFixed(2)}</td>
           <td class="center" style="padding:13px 14px;">${r.reel}</td>
           <td class="center" style="padding:13px 14px;">${r.dia || '-'}</td>
           <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
@@ -1150,14 +1150,10 @@ function renderTable() {
       <th class="center" onclick="sortTable('reel')">Sets / Reels <span class="sort-arrow">↕</span></th>
       <th class="center">Dia</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
-      <th class="center">Status</th>
     </tr>`;
 
     tbody.innerHTML = viewRows.map(r => {
       const cls   = r._match ? 'row-match' : 'row-nomatch';
-      const badge = r._match
-        ? `<span class="badge badge-match">✔ Matched</span>`
-        : `<span class="badge badge-nomatch">✕ No Match</span>`;
       
       let custHtml = `<div style="padding:13px 14px;">${r.customer}</div>`;
       let gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
@@ -1174,7 +1170,7 @@ function renderTable() {
 
         custHtml = uniqueItems.map((c, i) => {
           let totalReelsUsedInCombo = c.count * r.reel;
-          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.size}] (${totalReelsUsedInCombo})</div>`;
+          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${Number(c.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
         }).join('');
         
         gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
@@ -1193,12 +1189,11 @@ function renderTable() {
         </td>
         <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
           ${r._match && r.combo_str ? `<div style="font-size:14px; color:var(--accent); margin-bottom:8px; font-weight:900; letter-spacing:0.5px; background:rgba(79,142,247,0.1); padding:6px 10px; border-radius:6px; display:inline-block; border: 1px solid rgba(79,142,247,0.3);">${r.combo_str}</div>` : ''}
-          <div style="font-size:16px; font-weight:bold; color:var(--green);">${r._size || r.size}</div>
+          <div style="font-size:16px; font-weight:bold; color:var(--green);">${Number(r._size || r.size).toFixed(2)}</div>
         </td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.dia || '-'}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
-        <td class="center" style="vertical-align:middle; padding:13px 14px;">${badge}</td>
       </tr>`;
     }).join('');
   }
@@ -1219,16 +1214,15 @@ function exportPDF() {
       if (viewMode === 'data') {
           title = "Manage Data";
           head = [['Customer', 'GSM / BF', 'Size', 'Reels', 'Dia', 'Tons']];
-          body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, r.size, r.reel, r.dia || '-', r.tons.toFixed(3)]);
+          body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
-          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets / Reels', 'Dia', 'Tons', 'Status']];
+          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets / Reels', 'Dia', 'Tons']];
           
           body = viewRows.map(r => {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm} / ${r.bf}`;
-              let sizeStr = r._size || r.size;
-              let status = r._match ? 'Matched' : 'No Match';
+              let sizeStr = Number(r._size || r.size).toFixed(2);
               
               if (r._match && r.comboData) {
                   let groupedCombo = {};
@@ -1239,11 +1233,11 @@ function exportPDF() {
                   let uniqueItems = Object.values(groupedCombo);
                   
                   // Construct clean multi-line string for PDF cells
-                  custStr = uniqueItems.map(c => `${c.customer} [${c.size}] (${c.count * r.reel})`).join('\n');
-                  sizeStr = r.combo_str ? `${r.combo_str}\nTotal: ${r._size}` : `${r._size}`;
+                  custStr = uniqueItems.map(c => `${c.customer} [${Number(c.size).toFixed(2)}] (${c.count * r.reel})`).join('\n');
+                  sizeStr = r.combo_str ? `${r.combo_str}\nTotal: ${Number(r._size).toFixed(2)}` : `${Number(r._size).toFixed(2)}`;
               }
               
-              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3), status];
+              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)];
           });
       }
 
