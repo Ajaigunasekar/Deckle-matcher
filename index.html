@@ -533,7 +533,6 @@
     <div style="display:flex; flex-direction:column; gap:8px;">
       <button class="btn-secondary btn-data" onclick="showDataPage()">📋 MANAGE DATA</button>
       <button class="btn-primary" onclick="runMatch()">🔍 RUN MATCH</button>
-      <button class="btn-secondary" onclick="showRemaining()">📋 SHOW REMAINING</button>
       <button class="btn-secondary" onclick="clearAll()">✕ Clear All</button>
     </div>
 
@@ -591,7 +590,7 @@
             <input type="number" id="addBf" placeholder="BF">
             <input type="number" id="addSize" placeholder="Size (mm)">
             <input type="number" id="addReel" placeholder="Reels">
-            <input type="text" id="addShade" placeholder="Shade">
+            <input type="text" id="addDia" placeholder="Dia">
         </div>
         <button class="btn-primary" onclick="addManualOrder()" style="min-height: 40px; padding: 10px; font-size: 12px;">Add Order</button>
     </div>
@@ -658,7 +657,7 @@ let viewRows  = [];
 let currentFilter = 'all';
 let sortKey   = null;
 let sortAsc   = true;
-let viewMode  = 'match'; // Can be 'match', 'remaining', or 'data'
+let viewMode  = 'match'; // Can be 'match' or 'data'
 
 // ── Persist ────────────────────────────────────────────────────────────────
 function saveRules() {
@@ -741,9 +740,9 @@ function handleFile(input) {
         
         let size = parseNumber(getVal(['size', 'deckle', 'mm', 'cm']));
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
-        let shade = getVal(['shade']) || '-';
+        let dia = getVal(['dia', 'shade']) || '-';
         
-        return { id: index, customer, gsm, bf, size, reel, shade };
+        return { id: index, customer, gsm, bf, size, reel, dia };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       toast(`✓ Loaded ${allRows.length} valid orders`);
@@ -751,7 +750,6 @@ function handleFile(input) {
       document.getElementById('fileName').textContent = file.name;
       document.getElementById('uploadZone').style.display = 'none';
       
-      // Auto-jump to Data view to verify
       showDataPage();
       
     } catch(err) {
@@ -768,7 +766,7 @@ function addManualOrder() {
   let bf = parseFloat(document.getElementById('addBf').value) || 0;
   let size = parseFloat(document.getElementById('addSize').value) || 0;
   let reel = parseFloat(document.getElementById('addReel').value) || 0;
-  let shade = document.getElementById('addShade').value.trim() || '-';
+  let dia = document.getElementById('addDia').value.trim() || '-';
 
   if(!gsm || !bf || !size || !reel) {
     toast('Please fill GSM, BF, Size, and Reels', true);
@@ -784,20 +782,18 @@ function addManualOrder() {
     bf: bf,
     size: size,
     reel: reel,
-    shade: shade
+    dia: dia
   });
 
-  // Clear inputs
   document.getElementById('addCust').value = '';
   document.getElementById('addGsm').value = '';
   document.getElementById('addBf').value = '';
   document.getElementById('addSize').value = '';
   document.getElementById('addReel').value = '';
-  document.getElementById('addShade').value = '';
+  document.getElementById('addDia').value = '';
 
   toast('✓ Order Added');
   
-  // Refresh Data View
   showDataPage();
 }
 
@@ -931,7 +927,7 @@ function runMatch() {
           _size: totalSize,
           combo_str: sizeEquation,
           reel: sets, 
-          shade: bestCombo[0].shade,
+          dia: bestCombo[0].dia,
           tons: (totalSize / 2.54 * 12.2 * sets) / 1000,
           _match: true
         });
@@ -971,27 +967,9 @@ function runMatch() {
   }
 }
 
-// ── Show Remaining Unmatched Items Mode ────────────────────────────────────
-function showRemaining() {
-  if (!allRows.length) { toast('Please upload or add data first', true); return; }
-  
-  viewMode = 'remaining';
-  
-  document.querySelectorAll('.pills .pill').forEach(p => p.className = 'pill');
-  
-  viewRows = matchRows.filter(r => !r._match);
-  viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
-  
-  renderTable();
-  
-  if(window.innerWidth > 768) {
-    document.querySelector('.main').classList.add('sidebar-hidden');
-  }
-}
-
 // ── Filter ─────────────────────────────────────────────────────────────────
 function setFilter(f) {
-  if(viewMode === 'data') return; // Pills don't work in data view
+  if(viewMode === 'data') return;
   
   viewMode = 'match';
   currentFilter = f;
@@ -1067,7 +1045,6 @@ function renderTable() {
     return;
   }
   
-  // Show/Hide UI elements based on View Mode
   empty.style.display = 'none';
   table.style.display = 'table';
   
@@ -1076,18 +1053,12 @@ function renderTable() {
       dataForm.style.display = 'block';
       actionBlock.style.display = 'block';
       btnBack.style.display = matchRows.length > 0 ? 'inline-flex' : 'none';
-  } else if (viewMode === 'remaining') {
-      statsBar.style.display = 'flex';
-      dataForm.style.display = 'none';
-      actionBlock.style.display = 'block';
-      btnBack.style.display = 'inline-flex';
   } else {
       statsBar.style.display = 'flex';
       dataForm.style.display = 'none';
       actionBlock.style.display = 'none';
   }
   
-  // Dynamically calculate Global Stats
   if (viewMode !== 'data') {
       let sumMatchedTons = matchRows.filter(r => r._match).reduce((sum, r) => sum + (r.tons || 0), 0);
       let sumAllOrderTons = allRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
@@ -1104,7 +1075,7 @@ function renderTable() {
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Reels <span class="sort-arrow">↕</span></th>
-      <th class="center">Shade</th>
+      <th class="center">Dia</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
       <th class="center">Action</th>
     </tr>`;
@@ -1117,43 +1088,20 @@ function renderTable() {
           <td class="center" style="padding:13px 14px;">${r.gsm} / ${r.bf}</td>
           <td class="size-val center" style="padding:13px 14px;">${r.size}</td>
           <td class="center" style="padding:13px 14px;">${r.reel}</td>
-          <td class="center" style="padding:13px 14px;">${r.shade || '-'}</td>
+          <td class="center" style="padding:13px 14px;">${r.dia || '-'}</td>
           <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
           <td class="center" style="padding:13px 14px;">
             <button onclick="deleteOrder(${r.id})" class="btn-sm danger" style="background:transparent; border:none; font-size:16px;">✕</button>
           </td>
         </tr>`).join('');
     }
-  } else if (viewMode === 'remaining') {
-    thead.innerHTML = `<tr>
-      <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('reel')">Remaining Reels <span class="sort-arrow">↕</span></th>
-      <th class="center">Shade</th>
-      <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
-    </tr>`;
-
-    if(viewRows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="center" style="padding:40px; color:var(--green); font-weight:bold;">All reels were successfully matched!</td></tr>`;
-    } else {
-        tbody.innerHTML = viewRows.map(r => `<tr class="row-nomatch">
-          <td class="customer" style="padding:13px 14px;">${r.customer}</td>
-          <td class="center" style="padding:13px 14px;">${r.gsm} / ${r.bf}</td>
-          <td class="size-val center" style="padding:13px 14px;">${r.size}</td>
-          <td class="center" style="padding:13px 14px;">${r.reel}</td>
-          <td class="center" style="padding:13px 14px;">${r.shade || '-'}</td>
-          <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
-        </tr>`).join('');
-    }
-    
   } else {
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Sizes & Deckle <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('reel')">Sets <span class="sort-arrow">↕</span></th>
-      <th class="center">Shade</th>
+      <th class="center" onclick="sortTable('reel')">Sets / Reels <span class="sort-arrow">↕</span></th>
+      <th class="center">Dia</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
 
@@ -1197,7 +1145,7 @@ function renderTable() {
           <div style="font-size:16px; font-weight:bold; color:var(--green);">${r._size || r.size}</div>
         </td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
-        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.shade || '-'}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.dia || '-'}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
       </tr>`;
     }).join('');
@@ -1206,6 +1154,7 @@ function renderTable() {
 
 // ── Clear ──────────────────────────────────────────────────────────────────
 function clearAll() {
+  if (!confirm("Are you sure you want to clear all data? This cannot be undone.")) return;
   allRows = matchRows = viewRows = [];
   viewMode = 'match';
   document.getElementById('fileBadge').classList.remove('show');
