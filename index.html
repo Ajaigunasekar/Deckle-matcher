@@ -283,6 +283,41 @@
     padding: 16px 20px;
     -webkit-overflow-scrolling: touch;
   }
+  
+  /* ── Suggestion Board ── */
+  .suggestion-board {
+    background: rgba(245, 166, 35, 0.06);
+    border: 1px solid rgba(245, 166, 35, 0.3);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  .suggestion-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    font-weight: bold;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .suggestion-item {
+    font-size: 13px;
+    color: var(--text);
+    padding: 8px 0;
+    border-bottom: 1px dashed rgba(245, 166, 35, 0.15);
+    line-height: 1.5;
+  }
+  .suggestion-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .suggestion-item b {
+    color: var(--accent);
+  }
+  
   table {
     width: 100%;
     border-collapse: collapse;
@@ -642,6 +677,12 @@
         </div>
         <button class="btn-primary" onclick="addManualOrder()" style="min-height: 40px; padding: 10px; font-size: 12px;">Add Order</button>
     </div>
+    
+    <!-- Suggestion Board -->
+    <div id="suggestionBoard" class="suggestion-board" style="display:none;">
+      <div class="suggestion-title">💡 PRODUCTION SUGGESTIONS (UNMATCHED REELS)</div>
+      <div id="suggestionList"></div>
+    </div>
 
     <table id="resultsTable" style="display:none;">
       <thead id="tableHead">
@@ -845,10 +886,8 @@ function toggleAllSelection(isChecked) {
 function toggleEditMode() {
     isEditingData = !isEditingData;
     if (!isEditingData) {
-        // Officially saved - re-render and sort cleanly
         showDataPage();
     } else {
-        // Enter edit mode
         renderTable(); 
     }
 }
@@ -1018,7 +1057,6 @@ function runMatch() {
           }
         }
 
-        // Limit to 7 side-by-side matches for optimal math
         if (currentCombo.length >= 7) return;
 
         for (let i = startIndex; i < available.length; i++) {
@@ -1090,7 +1128,6 @@ function runMatch() {
   let matchedCombos = [...matchRows]; 
   let unMatched = [];
   
-  // Push anything with remaining inventory into the unmatched view
   Object.keys(groups).forEach(key => {
      groups[key].forEach(item => {
         if (item.reel > 0) {
@@ -1150,6 +1187,53 @@ function clearMatchedData() {
       showDataPage();
   } else {
       runMatch();
+  }
+}
+
+// ── Suggestion Engine ──────────────────────────────────────────────────────
+function updateSuggestionBoard() {
+  const board = document.getElementById('suggestionBoard');
+  const list = document.getElementById('suggestionList');
+
+  // Only show when viewing Unmatched records
+  if (viewMode !== 'match' || currentFilter !== 'nomatch' || viewRows.length === 0) {
+    board.style.display = 'none';
+    return;
+  }
+
+  const idx  = parseInt(document.getElementById('deckleSelect').value);
+  const rule = rules[idx];
+  if (!rule) return;
+
+  let suggestions = [];
+
+  viewRows.forEach(item => {
+    // 1. Suggest Extra Quantity for existing size
+    for (let i = 1; i <= 7; i++) {
+      let testSize = item.size * i;
+      if (testSize >= rule.min && testSize <= rule.max) {
+        if (i > item.reel) {
+          suggestions.push(`Ask <b>${item.customer}</b> for <b>${i - item.reel} extra reel(s)</b> of ${Number(item.size).toFixed(2)}mm. (Creates a perfect ${testSize.toFixed(2)}mm deckle)`);
+        }
+      }
+    }
+
+    // 2. Suggest New Order (Gap calculation using 1 reel)
+    let gapMin = rule.min - item.size;
+    let gapMax = rule.max - item.size;
+    if (gapMax > 50) { 
+      suggestions.push(`Clear <b>${item.customer}'s</b> ${Number(item.size).toFixed(2)}mm reel by finding a new order of <b>${Math.max(0, gapMin).toFixed(2)}mm to ${gapMax.toFixed(2)}mm</b> (GSM: ${item.gsm} / BF: ${item.bf} / Dia: ${item.dia})`);
+    }
+  });
+
+  // Deduplicate and limit to top 8 suggestions so it's not overwhelming
+  suggestions = [...new Set(suggestions)].slice(0, 8); 
+
+  if (suggestions.length > 0) {
+    list.innerHTML = suggestions.map(s => `<div class="suggestion-item">👉 ${s}</div>`).join('');
+    board.style.display = 'block';
+  } else {
+    board.style.display = 'none';
   }
 }
 
@@ -1228,6 +1312,7 @@ function renderTable() {
     statsBar.style.display = 'none';
     dataForm.style.display = 'none';
     actionBlock.style.display = 'none';
+    document.getElementById('suggestionBoard').style.display = 'none';
     empty.style.display = 'flex';
     return;
   }
@@ -1365,6 +1450,9 @@ function renderTable() {
       </tr>`;
     }).join('');
   }
+  
+  // Call the suggestion engine update
+  updateSuggestionBoard();
 }
 
 // ── Export PDF ─────────────────────────────────────────────────────────────
@@ -1444,6 +1532,7 @@ function clearAll() {
   document.getElementById('statsBar').style.display = 'none';
   document.getElementById('actionBlock').style.display = 'none';
   document.getElementById('dataEntryForm').style.display = 'none';
+  document.getElementById('suggestionBoard').style.display = 'none';
   document.getElementById('emptyState').style.display = 'flex';
   document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
   document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file or click \'Manage Data\' to add manual orders.';
