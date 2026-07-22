@@ -140,19 +140,24 @@
   .upload-icon { font-size: 28px; margin-bottom: 8px; }
   .upload-text { font-size: 13px; color: var(--sub); }
   .upload-text b { color: var(--accent); }
-  .file-badge {
-    background: rgba(62,207,142,0.12);
+  
+  .file-loaded-block {
+    background: rgba(62,207,142,0.05);
     border: 1px solid rgba(62,207,142,0.3);
     border-radius: var(--radius-sm);
-    padding: 8px 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .file-badge {
     font-size: 12px;
     color: var(--green);
-    display: none;
+    display: flex;
     align-items: center;
     gap: 8px;
     word-break: break-all;
   }
-  .file-badge.show { display: flex; }
 
   /* Deckle selector */
   select {
@@ -331,7 +336,8 @@
   
   /* Inline Edit Input */
   .edit-input {
-    width: 60px;
+    width: 100%;
+    max-width: 80px;
     background: var(--surface);
     border: 1px solid var(--accent);
     color: var(--text);
@@ -524,14 +530,25 @@
 
     <div>
       <div class="sec-label">1 · Upload Excel File</div>
+      
+      <!-- Upload Zone (Hidden after first upload) -->
       <div class="upload-zone" id="uploadZone">
-        <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" onchange="handleFile(this)">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" onchange="handleFile(this, false)">
         <div class="upload-icon">📂</div>
         <div class="upload-text">Tap to <b>Browse</b><br>Excel or CSV file</div>
       </div>
-      <div class="file-badge" id="fileBadge">
-        <span>✓</span><span id="fileName"></span>
+      
+      <!-- Loaded State & Append More Data Button -->
+      <div id="fileLoadedBlock" style="display:none;" class="file-loaded-block">
+        <div class="file-badge show">
+          <span>✓</span><span id="fileName">Data Loaded</span>
+        </div>
+        <button class="btn-secondary" onclick="document.getElementById('appendInput').click()" style="font-size:12px; min-height:36px; padding:8px; border-color:var(--accent); color:var(--accent);">
+          ➕ Add Another File
+        </button>
+        <input type="file" id="appendInput" accept=".xlsx,.xls,.xlsm,.csv" onchange="handleFile(this, true)" style="display:none;">
       </div>
+      
     </div>
 
     <div>
@@ -712,7 +729,7 @@ function refreshSelect() {
 }
 
 // ── File upload ────────────────────────────────────────────────────────────
-function handleFile(input) {
+function handleFile(input, isAppend) {
   const file = input.files[0];
   if (!file) return;
 
@@ -738,7 +755,7 @@ function handleFile(input) {
       }
 
       // ── ROBUST COLUMN MATCHING ──
-      allRows = rows.map((r, index) => {
+      let newRows = rows.map((r, index) => {
         let rowStrKeys = Object.keys(r);
         
         let getVal = (keywords) => {
@@ -778,14 +795,26 @@ function handleFile(input) {
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let dia = getVal(['dia', 'shade']) || '-';
         
-        return { id: index, customer, gsm, bf, size, reel, dia: String(dia), _selected: true };
+        return { id: 0, customer, gsm, bf, size, reel, dia: String(dia), _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
-      toast(`✓ Loaded ${allRows.length} valid orders`);
-      document.getElementById('fileBadge').classList.add('show');
-      document.getElementById('fileName').textContent = file.name;
-      document.getElementById('uploadZone').style.display = 'none';
+      if (isAppend) {
+          let maxId = allRows.length > 0 ? Math.max(...allRows.map(r => r.id)) : 0;
+          newRows.forEach(r => r.id = ++maxId);
+          allRows = [...allRows, ...newRows];
+          toast(`✓ Appended ${newRows.length} more orders`);
+          document.getElementById('fileName').textContent = "Multiple Files Loaded";
+      } else {
+          newRows.forEach((r, i) => r.id = i);
+          allRows = newRows;
+          toast(`✓ Loaded ${allRows.length} valid orders`);
+          document.getElementById('fileName').textContent = file.name;
+      }
       
+      document.getElementById('uploadZone').style.display = 'none';
+      document.getElementById('fileLoadedBlock').style.display = 'flex';
+      
+      input.value = ''; // Reset so the same file can be selected again if needed
       showDataPage();
       
     } catch(err) {
@@ -799,30 +828,59 @@ function handleFile(input) {
 function toggleSelection(id, isChecked) {
     let row = allRows.find(r => r.id === id);
     if (row) row._selected = isChecked;
-    showDataPage(); // Refresh table to update Select All master checkbox
+    
+    let vRow = viewRows.find(r => r.id === id);
+    if (vRow) vRow._selected = isChecked;
+    
+    renderTable(); // Refresh table strictly without re-sorting
 }
 
 function toggleAllSelection(isChecked) {
     allRows.forEach(r => r._selected = isChecked);
-    showDataPage();
+    viewRows.forEach(r => r._selected = isChecked);
+    renderTable();
 }
 
 // ── Inline Edit Data Logic ─────────────────────────────────────────────────
 function toggleEditMode() {
     isEditingData = !isEditingData;
-    renderTable();
+    if (!isEditingData) {
+        // Officially saved - re-render and sort cleanly
+        showDataPage();
+    } else {
+        // Enter edit mode
+        renderTable(); 
+    }
 }
 
 function updateData(id, field, value) {
     let row = allRows.find(r => r.id === id);
+    let vRow = viewRows.find(r => r.id === id);
+    
     if (row) {
         if (field === 'customer' || field === 'dia') {
             row[field] = value;
+            if(vRow) vRow[field] = value;
         } else {
             row[field] = parseFloat(value) || 0;
+            if(vRow) vRow[field] = parseFloat(value) || 0;
         }
+        
+        // Recalculate tons silently on the specific row
+        row.tons = (row.size / 2.54 * 12.2 * row.reel) / 1000;
+        if(vRow) vRow.tons = row.tons;
     }
-    showDataPage(); // Rerender to instantly update Total Order Tons mathematically
+    
+    // Update top global stats instantly
+    let activeRows = allRows.filter(r => r._selected !== false);
+    let sumAllOrderTons = activeRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
+    document.getElementById('statOrderTons').textContent = sumAllOrderTons.toFixed(3);
+    
+    // Visually update the tons in the table without breaking input focus
+    let tonsCell = document.getElementById(`tons-${id}`);
+    if (tonsCell && row) {
+        tonsCell.textContent = row.tons.toFixed(3);
+    }
 }
 
 // ── Long-Press Delete Logic ────────────────────────────────────────────────
@@ -837,7 +895,7 @@ function startPress(id) {
         deleteOrder(id);
       }
     }
-  }, 800);
+  }, 800); // 800ms long press threshold
 }
 
 function endPress() {
@@ -902,10 +960,6 @@ function showDataPage() {
   
   viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
   renderTable();
-  
-  if(window.innerWidth > 768) {
-    document.querySelector('.main').classList.remove('sidebar-hidden');
-  }
 }
 
 // ── Run match (Inventory Deduction + Strict Dia Matching + Up to 7 Reels) ─
@@ -960,7 +1014,7 @@ function runMatch() {
           }
         }
 
-        // Limit to 7 side-by-side matches
+        // Limit to 7 side-by-side matches for optimal math
         if (currentCombo.length >= 7) return;
 
         for (let i = startIndex; i < available.length; i++) {
@@ -1032,6 +1086,7 @@ function runMatch() {
   let matchedCombos = [...matchRows]; 
   let unMatched = [];
   
+  // Push anything with remaining inventory into the unmatched view
   Object.keys(groups).forEach(key => {
      groups[key].forEach(item => {
         if (item.reel > 0) {
@@ -1053,10 +1108,6 @@ function runMatch() {
 
   currentFilter = 'match';
   setFilter('match');
-  
-  if(window.innerWidth > 768) {
-    document.querySelector('.main').classList.add('sidebar-hidden');
-  }
 }
 
 // ── Manual Matched Data Clear ──────────────────────────────────────────────
@@ -1200,7 +1251,6 @@ function renderTable() {
   
   if (viewMode !== 'data') {
       let sumMatchedTons = matchRows.filter(r => r._match).reduce((sum, r) => sum + (r.tons || 0), 0);
-      
       let activeRows = allRows.filter(r => r._selected !== false);
       let sumAllOrderTons = activeRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
       let balanceTons = Math.max(0, sumAllOrderTons - sumMatchedTons);
@@ -1251,7 +1301,7 @@ function renderTable() {
             <td class="size-val center" style="padding:13px 14px;">${sizeCell}</td>
             <td class="center" style="padding:13px 14px;">${reelCell}</td>
             <td class="center" style="padding:13px 14px;">${diaCell}</td>
-            <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
+            <td class="center" id="tons-${r.id}" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
           </tr>`
         }).join('');
     }
@@ -1383,8 +1433,10 @@ function clearAll() {
   viewMode = 'match';
   isEditingData = false;
   document.getElementById('fileBadge').classList.remove('show');
+  document.getElementById('fileLoadedBlock').style.display = 'none';
   document.getElementById('uploadZone').style.display = '';
   document.getElementById('fileInput').value = '';
+  document.getElementById('appendInput').value = '';
   document.getElementById('resultsTable').style.display = 'none';
   document.getElementById('statsBar').style.display = 'none';
   document.getElementById('actionBlock').style.display = 'none';
@@ -1393,7 +1445,6 @@ function clearAll() {
   document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
   document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file or click \'Manage Data\' to add manual orders.';
   
-  document.querySelector('.main').classList.remove('sidebar-hidden');
   toast('Cleared');
 }
 
