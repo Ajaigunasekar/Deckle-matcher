@@ -328,6 +328,23 @@
 
   /* Row highlight overrides */
   tr.row-nomatch td.size-val { color: var(--red); }
+  
+  /* Inline Edit Input */
+  .edit-input {
+    width: 60px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px;
+    font-size: 14px;
+    font-family: var(--sans);
+    text-align: center;
+  }
+  .edit-input:focus {
+    outline: none;
+    border-color: var(--green);
+  }
 
   /* ── Empty / placeholder ── */
   .empty {
@@ -590,6 +607,9 @@
       <button id="btnBackToMatches" class="btn-secondary" onclick="runMatch()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold;">
         ⬅ Back to Matches
       </button>
+      <button id="btnEditData" class="btn-secondary" onclick="toggleEditMode()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; margin-left: 8px;">
+        ✏️ Edit Reels
+      </button>
     </div>
     
     <!-- Manual Data Entry Form -->
@@ -673,6 +693,7 @@ let currentFilter = 'all';
 let sortKey   = null;
 let sortAsc   = true;
 let viewMode  = 'match'; // Can be 'match' or 'data'
+let isEditingData = false;
 
 // ── Persist ────────────────────────────────────────────────────────────────
 function saveRules() {
@@ -758,7 +779,7 @@ function handleFile(input) {
         let dia = getVal(['dia', 'shade']) || '-';
         
         // _selected controls whether the row is included in the match run
-        return { id: index, customer, gsm, bf, size, reel, dia, _selected: true };
+        return { id: index, customer, gsm, bf, size, reel, dia: String(dia), _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       toast(`✓ Loaded ${allRows.length} valid orders`);
@@ -775,10 +796,31 @@ function handleFile(input) {
   reader.readAsArrayBuffer(file);
 }
 
-// ── Checkbox Toggle ────────────────────────────────────────────────────────
+// ── Selection Controls ─────────────────────────────────────────────────────
 function toggleSelection(id, isChecked) {
     let row = allRows.find(r => r.id === id);
     if (row) row._selected = isChecked;
+    renderTable(); // Refresh table to update Select All master checkbox
+}
+
+function toggleAllSelection(isChecked) {
+    allRows.forEach(r => r._selected = isChecked);
+    renderTable();
+}
+
+// ── Edit Reels Logic ───────────────────────────────────────────────────────
+function toggleEditMode() {
+    isEditingData = !isEditingData;
+    renderTable();
+}
+
+function updateReelCount(id, val) {
+    let row = allRows.find(r => r.id === id);
+    if (row) {
+        row.reel = parseFloat(val) || 0;
+        row.tons = (row.size / 2.54 * 12.2 * row.reel) / 1000;
+    }
+    renderTable();
 }
 
 // ── Long-Press Delete Logic ────────────────────────────────────────────────
@@ -824,7 +866,7 @@ function addManualOrder() {
     bf: bf,
     size: size,
     reel: reel,
-    dia: dia,
+    dia: String(dia),
     _selected: true
   });
 
@@ -864,7 +906,7 @@ function showDataPage() {
   }
 }
 
-// ── Run match (Inventory Deduction Algorithm + Tons) ──────────────────────
+// ── Run match (Inventory Deduction + Strict Dia Matching + Depth) ─────────
 function runMatch() {
   // Only process rows where checkbox is selected
   let activeRows = allRows.filter(r => r._selected !== false);
@@ -917,7 +959,8 @@ function runMatch() {
           }
         }
 
-        if (currentCombo.length >= 5) return;
+        // Increased depth limit to 12 to find deeply nested combos (e.g. 71x6)
+        if (currentCombo.length >= 12) return;
 
         for (let i = startIndex; i < available.length; i++) {
           let item = available[i];
@@ -926,6 +969,9 @@ function runMatch() {
 
           let countUsed = usedCounts[item.id] || 0;
           if (item.reel < countUsed + 1) continue;
+          
+          // STRICT DIA MATCHING: If there's an existing item, DIA must perfectly match
+          if (currentCombo.length > 0 && item.dia !== currentCombo[0].dia) continue;
 
           let newMinBf = Math.min(minBf, item.bf);
           let newMaxBf = Math.max(maxBf, item.bf);
@@ -1041,12 +1087,10 @@ function clearMatchedData() {
       });
   });
 
-  // Filter out completely consumed orders from master list
   allRows = allRows.filter(row => row.reel > 0);
   
   toast('✓ Matched Orders Cleared');
   
-  // Refresh view
   if (viewMode === 'data') {
       showDataPage();
   } else {
@@ -1122,6 +1166,7 @@ function renderTable() {
   const dataForm = document.getElementById('dataEntryForm');
   const actionBlock = document.getElementById('actionBlock');
   const btnBack = document.getElementById('btnBackToMatches');
+  const btnEdit = document.getElementById('btnEditData');
 
   if (!allRows.length && viewMode !== 'data') {
     table.style.display = 'none';
@@ -1140,10 +1185,17 @@ function renderTable() {
       dataForm.style.display = 'block';
       actionBlock.style.display = 'block';
       btnBack.style.display = matchRows.length > 0 ? 'inline-flex' : 'none';
+      btnEdit.style.display = 'inline-flex';
+      
+      btnEdit.innerHTML = isEditingData ? '💾 Save Reels' : '✏️ Edit Reels';
+      btnEdit.style.background = isEditingData ? 'var(--accent)' : 'transparent';
+      btnEdit.style.color = isEditingData ? '#fff' : 'var(--sub)';
   } else {
       statsBar.style.display = 'flex';
       dataForm.style.display = 'none';
       actionBlock.style.display = 'none';
+      btnEdit.style.display = 'none';
+      isEditingData = false;
   }
   
   if (viewMode !== 'data') {
@@ -1161,8 +1213,12 @@ function renderTable() {
   }
 
   if (viewMode === 'data') {
+    let allSelected = allRows.length > 0 && allRows.every(r => r._selected !== false);
+    
     thead.innerHTML = `<tr>
-      <th class="center" style="width:50px;">Include</th>
+      <th class="center" style="width:50px;">
+         <input type="checkbox" ${allSelected ? 'checked' : ''} onchange="toggleAllSelection(this.checked)" style="width:18px;height:18px;accent-color:var(--accent);">
+      </th>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
@@ -1174,17 +1230,23 @@ function renderTable() {
     if(viewRows.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="center" style="padding:40px; color:var(--sub);">No orders added yet. Add an order above.</td></tr>`;
     } else {
-        tbody.innerHTML = viewRows.map(r => `<tr class="data-row" onmousedown="startPress(${r.id})" onmouseup="endPress()" onmouseleave="endPress()" ontouchstart="startPress(${r.id})" ontouchend="endPress()" oncontextmenu="return false;">
-          <td class="center" style="padding:13px 14px;">
-            <input type="checkbox" ${r._selected !== false ? 'checked' : ''} onchange="toggleSelection(${r.id}, this.checked)" style="width:18px;height:18px;accent-color:var(--accent);">
-          </td>
-          <td class="customer" style="padding:13px 14px;">${r.customer}</td>
-          <td class="center" style="padding:13px 14px;">${r.gsm} / ${r.bf}</td>
-          <td class="size-val center" style="padding:13px 14px;">${Number(r.size).toFixed(2)}</td>
-          <td class="center" style="padding:13px 14px;">${r.reel}</td>
-          <td class="center" style="padding:13px 14px;">${r.dia || '-'}</td>
-          <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
-        </tr>`).join('');
+        tbody.innerHTML = viewRows.map(r => {
+          let reelCell = isEditingData 
+            ? `<input type="number" class="edit-input" value="${r.reel}" onchange="updateReelCount(${r.id}, this.value)">`
+            : r.reel;
+            
+          return `<tr class="data-row" onmousedown="startPress(${r.id})" onmouseup="endPress()" onmouseleave="endPress()" ontouchstart="startPress(${r.id})" ontouchend="endPress()" oncontextmenu="return false;">
+            <td class="center" style="padding:13px 14px;">
+              <input type="checkbox" ${r._selected !== false ? 'checked' : ''} onchange="toggleSelection(${r.id}, this.checked)" style="width:18px;height:18px;accent-color:var(--accent);">
+            </td>
+            <td class="customer" style="padding:13px 14px;">${r.customer}</td>
+            <td class="center" style="padding:13px 14px;">${r.gsm} / ${r.bf}</td>
+            <td class="size-val center" style="padding:13px 14px;">${Number(r.size).toFixed(2)}</td>
+            <td class="center" style="padding:13px 14px;">${reelCell}</td>
+            <td class="center" style="padding:13px 14px;">${r.dia || '-'}</td>
+            <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
+          </tr>`
+        }).join('');
     }
     
   } else {
@@ -1294,7 +1356,7 @@ function exportPDF() {
           head: head,
           body: body,
           theme: 'grid',
-          headStyles: { fillColor: [79, 142, 247] }, // --accent color
+          headStyles: { fillColor: [79, 142, 247] },
           styles: { fontSize: 10, cellPadding: 4, valign: 'middle' }
       });
 
@@ -1312,6 +1374,7 @@ function clearAll() {
   
   allRows = matchRows = viewRows = [];
   viewMode = 'match';
+  isEditingData = false;
   document.getElementById('fileBadge').classList.remove('show');
   document.getElementById('uploadZone').style.display = '';
   document.getElementById('fileInput').value = '';
