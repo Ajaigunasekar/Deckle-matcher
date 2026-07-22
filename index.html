@@ -608,7 +608,7 @@
         ⬅ Back to Matches
       </button>
       <button id="btnEditData" class="btn-secondary" onclick="toggleEditMode()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; margin-left: 8px;">
-        ✏️ Edit Reels
+        ✏️ Edit
       </button>
     </div>
     
@@ -778,7 +778,6 @@ function handleFile(input) {
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let dia = getVal(['dia', 'shade']) || '-';
         
-        // _selected controls whether the row is included in the match run
         return { id: index, customer, gsm, bf, size, reel, dia: String(dia), _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
@@ -800,27 +799,30 @@ function handleFile(input) {
 function toggleSelection(id, isChecked) {
     let row = allRows.find(r => r.id === id);
     if (row) row._selected = isChecked;
-    renderTable(); // Refresh table to update Select All master checkbox
+    showDataPage(); // Refresh table to update Select All master checkbox
 }
 
 function toggleAllSelection(isChecked) {
     allRows.forEach(r => r._selected = isChecked);
-    renderTable();
+    showDataPage();
 }
 
-// ── Edit Reels Logic ───────────────────────────────────────────────────────
+// ── Inline Edit Data Logic ─────────────────────────────────────────────────
 function toggleEditMode() {
     isEditingData = !isEditingData;
     renderTable();
 }
 
-function updateReelCount(id, val) {
+function updateData(id, field, value) {
     let row = allRows.find(r => r.id === id);
     if (row) {
-        row.reel = parseFloat(val) || 0;
-        row.tons = (row.size / 2.54 * 12.2 * row.reel) / 1000;
+        if (field === 'customer' || field === 'dia') {
+            row[field] = value;
+        } else {
+            row[field] = parseFloat(value) || 0;
+        }
     }
-    renderTable();
+    showDataPage(); // Rerender to instantly update Total Order Tons mathematically
 }
 
 // ── Long-Press Delete Logic ────────────────────────────────────────────────
@@ -835,7 +837,7 @@ function startPress(id) {
         deleteOrder(id);
       }
     }
-  }, 800); // 800ms long press threshold
+  }, 800);
 }
 
 function endPress() {
@@ -906,9 +908,8 @@ function showDataPage() {
   }
 }
 
-// ── Run match (Inventory Deduction + Strict Dia Matching + Depth) ─────────
+// ── Run match (Inventory Deduction + Strict Dia Matching + Up to 7 Reels) ─
 function runMatch() {
-  // Only process rows where checkbox is selected
   let activeRows = allRows.filter(r => r._selected !== false);
   
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
@@ -959,8 +960,8 @@ function runMatch() {
           }
         }
 
-        // Increased depth limit to 12 to find deeply nested combos (e.g. 71x6)
-        if (currentCombo.length >= 12) return;
+        // Limit to 7 side-by-side matches
+        if (currentCombo.length >= 7) return;
 
         for (let i = startIndex; i < available.length; i++) {
           let item = available[i];
@@ -970,7 +971,7 @@ function runMatch() {
           let countUsed = usedCounts[item.id] || 0;
           if (item.reel < countUsed + 1) continue;
           
-          // STRICT DIA MATCHING: If there's an existing item, DIA must perfectly match
+          // STRICT DIA MATCHING
           if (currentCombo.length > 0 && item.dia !== currentCombo[0].dia) continue;
 
           let newMinBf = Math.min(minBf, item.bf);
@@ -1031,7 +1032,6 @@ function runMatch() {
   let matchedCombos = [...matchRows]; 
   let unMatched = [];
   
-  // Push anything with remaining inventory into the unmatched view
   Object.keys(groups).forEach(key => {
      groups[key].forEach(item => {
         if (item.reel > 0) {
@@ -1187,7 +1187,7 @@ function renderTable() {
       btnBack.style.display = matchRows.length > 0 ? 'inline-flex' : 'none';
       btnEdit.style.display = 'inline-flex';
       
-      btnEdit.innerHTML = isEditingData ? '💾 Save Reels' : '✏️ Edit Reels';
+      btnEdit.innerHTML = isEditingData ? '💾 Save' : '✏️ Edit';
       btnEdit.style.background = isEditingData ? 'var(--accent)' : 'transparent';
       btnEdit.style.color = isEditingData ? '#fff' : 'var(--sub)';
   } else {
@@ -1213,7 +1213,8 @@ function renderTable() {
   }
 
   if (viewMode === 'data') {
-    let allSelected = allRows.length > 0 && allRows.every(r => r._selected !== false);
+    let activeRows = allRows.filter(r => r._selected !== false);
+    let allSelected = allRows.length > 0 && activeRows.length === allRows.length;
     
     thead.innerHTML = `<tr>
       <th class="center" style="width:50px;">
@@ -1231,19 +1232,25 @@ function renderTable() {
         tbody.innerHTML = `<tr><td colspan="7" class="center" style="padding:40px; color:var(--sub);">No orders added yet. Add an order above.</td></tr>`;
     } else {
         tbody.innerHTML = viewRows.map(r => {
-          let reelCell = isEditingData 
-            ? `<input type="number" class="edit-input" value="${r.reel}" onchange="updateReelCount(${r.id}, this.value)">`
-            : r.reel;
+          let custCell = isEditingData ? `<input type="text" class="edit-input" style="width:80px;" value="${r.customer}" onchange="updateData(${r.id}, 'customer', this.value)">` : r.customer;
+          
+          let gsmBfCell = isEditingData 
+              ? `<input type="number" class="edit-input" style="width:50px; margin-right:4px;" value="${r.gsm}" onchange="updateData(${r.id}, 'gsm', this.value)"> / <input type="number" class="edit-input" style="width:40px; margin-left:4px;" value="${r.bf}" onchange="updateData(${r.id}, 'bf', this.value)">`
+              : `${r.gsm} / ${r.bf}`;
+              
+          let sizeCell = isEditingData ? `<input type="number" class="edit-input" style="width:60px;" value="${r.size}" onchange="updateData(${r.id}, 'size', this.value)">` : Number(r.size).toFixed(2);
+          let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:50px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
+          let diaCell = isEditingData ? `<input type="text" class="edit-input" style="width:50px;" value="${r.dia}" onchange="updateData(${r.id}, 'dia', this.value)">` : (r.dia || '-');
             
           return `<tr class="data-row" onmousedown="startPress(${r.id})" onmouseup="endPress()" onmouseleave="endPress()" ontouchstart="startPress(${r.id})" ontouchend="endPress()" oncontextmenu="return false;">
             <td class="center" style="padding:13px 14px;">
               <input type="checkbox" ${r._selected !== false ? 'checked' : ''} onchange="toggleSelection(${r.id}, this.checked)" style="width:18px;height:18px;accent-color:var(--accent);">
             </td>
-            <td class="customer" style="padding:13px 14px;">${r.customer}</td>
-            <td class="center" style="padding:13px 14px;">${r.gsm} / ${r.bf}</td>
-            <td class="size-val center" style="padding:13px 14px;">${Number(r.size).toFixed(2)}</td>
+            <td class="customer" style="padding:13px 14px;">${custCell}</td>
+            <td class="center" style="padding:13px 14px;">${gsmBfCell}</td>
+            <td class="size-val center" style="padding:13px 14px;">${sizeCell}</td>
             <td class="center" style="padding:13px 14px;">${reelCell}</td>
-            <td class="center" style="padding:13px 14px;">${r.dia || '-'}</td>
+            <td class="center" style="padding:13px 14px;">${diaCell}</td>
             <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
           </tr>`
         }).join('');
