@@ -895,7 +895,7 @@ function startPress(id) {
         deleteOrder(id);
       }
     }
-  }, 800); // 800ms long press threshold
+  }, 800);
 }
 
 function endPress() {
@@ -960,6 +960,10 @@ function showDataPage() {
   
   viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
   renderTable();
+  
+  if(window.innerWidth > 768) {
+    document.querySelector('.main').classList.remove('sidebar-hidden');
+  }
 }
 
 // ── Run match (Inventory Deduction + Strict Dia Matching + Up to 7 Reels) ─
@@ -1432,7 +1436,6 @@ function clearAll() {
   allRows = matchRows = viewRows = [];
   viewMode = 'match';
   isEditingData = false;
-  document.getElementById('fileBadge').classList.remove('show');
   document.getElementById('fileLoadedBlock').style.display = 'none';
   document.getElementById('uploadZone').style.display = '';
   document.getElementById('fileInput').value = '';
@@ -1445,6 +1448,7 @@ function clearAll() {
   document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
   document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file or click \'Manage Data\' to add manual orders.';
   
+  document.querySelector('.main').classList.remove('sidebar-hidden');
   toast('Cleared');
 }
 
