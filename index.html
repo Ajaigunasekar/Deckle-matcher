@@ -304,11 +304,11 @@
     gap: 8px;
   }
   .suggestion-item {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text);
-    padding: 8px 0;
+    padding: 10px 0;
     border-bottom: 1px dashed rgba(245, 166, 35, 0.15);
-    line-height: 1.5;
+    line-height: 1.6;
   }
   .suggestion-item:last-child {
     border-bottom: none;
@@ -1057,6 +1057,7 @@ function runMatch() {
           }
         }
 
+        // Limit to 7 side-by-side matches for optimal math
         if (currentCombo.length >= 7) return;
 
         for (let i = startIndex; i < available.length; i++) {
@@ -1128,6 +1129,7 @@ function runMatch() {
   let matchedCombos = [...matchRows]; 
   let unMatched = [];
   
+  // Push anything with remaining inventory into the unmatched view
   Object.keys(groups).forEach(key => {
      groups[key].forEach(item => {
         if (item.reel > 0) {
@@ -1208,29 +1210,61 @@ function updateSuggestionBoard() {
   let suggestions = [];
 
   viewRows.forEach(item => {
-    // 1. Suggest Extra Quantity for existing size
-    for (let i = 1; i <= 7; i++) {
-      let testSize = item.size * i;
-      if (testSize >= rule.min && testSize <= rule.max) {
-        if (i > item.reel) {
-          suggestions.push(`Ask <b>${item.customer}</b> for <b>${i - item.reel} extra reel(s)</b> of ${Number(item.size).toFixed(2)}mm. (Creates a perfect ${testSize.toFixed(2)}mm deckle)`);
-        }
-      }
-    }
+    let maxK = Math.floor(rule.max / item.size);
+    if (maxK === 0) return; // Size is bigger than deckle max
 
-    // 2. Suggest New Order (Gap calculation using 1 reel)
-    let gapMin = rule.min - item.size;
-    let gapMax = rule.max - item.size;
-    if (gapMax > 50) { 
-      suggestions.push(`Clear <b>${item.customer}'s</b> ${Number(item.size).toFixed(2)}mm reel by finding a new order of <b>${Math.max(0, gapMin).toFixed(2)}mm to ${gapMax.toFixed(2)}mm</b> (GSM: ${item.gsm} / BF: ${item.bf} / Dia: ${item.dia})`);
+    // Maximize reels per set to clear inventory fastest
+    let k = Math.min(maxK, item.reel);
+    let sets = Math.floor(item.reel / k);
+    
+    let comboStr = Array(k).fill(Number(item.size).toFixed(2)).join(' + ');
+    let currentSize = k * item.size;
+    let gapMin = rule.min - currentSize;
+    let gapMax = rule.max - currentSize;
+
+    if (gapMax >= 0) {
+        let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
+        let avgGap = (Math.max(0, gapMin) + gapMax) / 2;
+        
+        let fillers = [];
+        if (avgGap >= 30) fillers.push(`<b>${avgGap.toFixed(1)}</b> (1 reel)`);
+        if (avgGap >= 60) fillers.push(`<b>${(avgGap/2).toFixed(1)}</b> (2 reels)`);
+        if (avgGap >= 90) fillers.push(`<b>${(avgGap/3).toFixed(1)}</b> (3 reels)`);
+        if (avgGap >= 120) fillers.push(`<b>${(avgGap/4).toFixed(1)}</b> (4 reels)`);
+        
+        let fillerStr = fillers.length > 0 ? `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ Try: ${fillers.join(' &nbsp;|&nbsp; ')}</div>` : '';
+        
+        let extraStr = '';
+        for (let i = k + 1; i <= Math.min(k + 6, 12); i++) {
+            let testSize = item.size * i;
+            if (testSize >= rule.min && testSize <= rule.max) {
+                 let extraReels = (i - k) * sets;
+                 extraStr = `<div style="font-size:12px; color:var(--amber); margin-top:2px;">↳ OR ask for <b>${extraReels} extra reels</b> of ${Number(item.size).toFixed(2)} to close this deckle perfectly.</div>`;
+                 break;
+            }
+        }
+
+        if (gapMax < 5 && gapMin <= 0) {
+            // Perfect fit
+            suggestions.push(`
+            <div class="suggestion-item">
+                <div style="margin-bottom:4px;"><b>${item.customer}</b> <span style="font-size:11px; color:var(--sub);">[GSM ${item.gsm} | BF ${item.bf} | Dia ${item.dia}]</span></div>
+                <span style="color:var(--green); font-family:var(--mono);">${comboStr}</span> = <b style="color:var(--green);">PERFECT DECKLE</b> <i>- ${sets} Sets</i>
+            </div>`);
+        } else {
+            suggestions.push(`
+            <div class="suggestion-item">
+                <div style="margin-bottom:4px;"><b>${item.customer}</b> <span style="font-size:11px; color:var(--sub);">[GSM ${item.gsm} | BF ${item.bf} | Dia ${item.dia}]</span></div>
+                <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> + <b style="color:var(--red);">Need ${needStr}</b> <i>- ${sets} Sets</i>
+                ${fillerStr}
+                ${extraStr}
+            </div>`);
+        }
     }
   });
 
-  // Deduplicate and limit to top 8 suggestions so it's not overwhelming
-  suggestions = [...new Set(suggestions)].slice(0, 8); 
-
   if (suggestions.length > 0) {
-    list.innerHTML = suggestions.map(s => `<div class="suggestion-item">👉 ${s}</div>`).join('');
+    list.innerHTML = suggestions.join('');
     board.style.display = 'block';
   } else {
     board.style.display = 'none';
@@ -1330,6 +1364,8 @@ function renderTable() {
       btnEdit.innerHTML = isEditingData ? '💾 Save' : '✏️ Edit';
       btnEdit.style.background = isEditingData ? 'var(--accent)' : 'transparent';
       btnEdit.style.color = isEditingData ? '#fff' : 'var(--sub)';
+      
+      document.getElementById('suggestionBoard').style.display = 'none'; // Hide suggestions in manage data
   } else {
       statsBar.style.display = 'flex';
       dataForm.style.display = 'none';
@@ -1449,10 +1485,10 @@ function renderTable() {
         <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
       </tr>`;
     }).join('');
+    
+    // Call the suggestion engine update when rendering the match/unmatched view
+    updateSuggestionBoard();
   }
-  
-  // Call the suggestion engine update
-  updateSuggestionBoard();
 }
 
 // ── Export PDF ─────────────────────────────────────────────────────────────
