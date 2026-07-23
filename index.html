@@ -1251,19 +1251,36 @@ function updateSuggestionBoard() {
             let dia = currentCombo[0].dia;
 
             let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
-            let avgGap = (Math.max(0, gapMin) + gapMax) / 2;
             
-            // Generate split suggestions based on Sets
-            let fillers = [];
-            if (avgGap >= 30) fillers.push(`<b>${avgGap.toFixed(1)}</b> (${sets} reels)`);
-            if (avgGap >= 60) fillers.push(`<b>${(avgGap/2).toFixed(1)}</b> (${sets * 2} reels)`);
-            if (avgGap >= 90) fillers.push(`<b>${(avgGap/3).toFixed(1)}</b> (${sets * 3} reels)`);
-            
-            let fillerStr = fillers.length > 0 ? `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ Try size: ${fillers.join(' &nbsp;|&nbsp; ')}</div>` : '';
+            // Generate split suggestions only if gapMax > 120
+            let fillerStr = '';
+            if (gapMax > 120) {
+                let fillers = [];
+                // Split by 2
+                let split2Min = gapMin > 0 ? gapMin / 2 : 0;
+                let split2Max = gapMax / 2;
+                fillers.push(`<b>${split2Min.toFixed(2)} to ${split2Max.toFixed(2)}</b> (${sets * 2} reels)`);
+
+                // Split by 3
+                if (gapMax > 180) {
+                    let split3Min = gapMin > 0 ? gapMin / 3 : 0;
+                    let split3Max = gapMax / 3;
+                    fillers.push(`<b>${split3Min.toFixed(2)} to ${split3Max.toFixed(2)}</b> (${sets * 3} reels)`);
+                }
+                
+                // Split by 4
+                if (gapMax > 240) {
+                    let split4Min = gapMin > 0 ? gapMin / 4 : 0;
+                    let split4Max = gapMax / 4;
+                    fillers.push(`<b>${split4Min.toFixed(2)} to ${split4Max.toFixed(2)}</b> (${sets * 4} reels)`);
+                }
+
+                fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
+            }
 
             let html = `<div class="suggestion-item">
                 <div style="margin-bottom:4px;"><span style="font-size:11px; color:var(--sub);">GSM ${gsm} | BF ${bf} | Dia ${dia}</span> &nbsp;•&nbsp; <span style="font-size:12px; color:var(--text);">${namesStr}</span></div>
-                <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">Need ${needStr}</b> <i style="color:var(--amber);">- ${sets} Sets</i>
+                <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">Need ${needStr} (${sets} reels)</b>
                 ${fillerStr}
             </div>`;
 
