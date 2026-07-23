@@ -306,7 +306,7 @@
   .suggestion-item {
     font-size: 14px;
     color: var(--text);
-    padding: 10px 0;
+    padding: 12px 0;
     border-bottom: 1px dashed rgba(245, 166, 35, 0.15);
     line-height: 1.6;
   }
@@ -1192,7 +1192,7 @@ function clearMatchedData() {
   }
 }
 
-// ── Suggestion Engine ──────────────────────────────────────────────────────
+// ── Suggestion Engine (Cross-Customer Combination Gap Analysis) ────────────
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1207,64 +1207,119 @@ function updateSuggestionBoard() {
   const rule = rules[idx];
   if (!rule) return;
 
+  // 1. Group unmatched rows by strict constraints: GSM, BF, Dia
+  let groups = {};
+  viewRows.forEach(row => {
+    let key = `${row.gsm}_${row.bf}_${row.dia}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  });
+
   let suggestions = [];
 
-  viewRows.forEach(item => {
-    let maxK = Math.floor(rule.max / item.size);
-    if (maxK === 0) return; // Size is bigger than deckle max
+  // 2. Find combinations across multiple customers within each group
+  Object.values(groups).forEach(items => {
+    function search(startIndex, currentCombo, currentSize, usedCounts) {
+      if (currentCombo.length > 0) {
+        let gapMin = rule.min - currentSize;
+        let gapMax = rule.max - currentSize;
 
-    // Maximize reels per set to clear inventory fastest
-    let k = Math.min(maxK, item.reel);
-    let sets = Math.floor(item.reel / k);
-    
-    let comboStr = Array(k).fill(Number(item.size).toFixed(2)).join(' + ');
-    let currentSize = k * item.size;
-    let gapMin = rule.min - currentSize;
-    let gapMax = rule.max - currentSize;
+        // Only suggest if there's a practical gap to fill
+        if (gapMax >= 30) {
+          let itemCounts = {};
+          currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
+          
+          // Max sets possible for this specific combination
+          let sets = Math.min(...Object.keys(itemCounts).map(id => {
+            let origItem = items.find(a => a.id == id);
+            return Math.floor(origItem.reel / itemCounts[id]);
+          }));
 
-    if (gapMax >= 0) {
-        let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
-        let avgGap = (Math.max(0, gapMin) + gapMax) / 2;
-        
-        let fillers = [];
-        if (avgGap >= 30) fillers.push(`<b>${avgGap.toFixed(1)}</b> (1 reel)`);
-        if (avgGap >= 60) fillers.push(`<b>${(avgGap/2).toFixed(1)}</b> (2 reels)`);
-        if (avgGap >= 90) fillers.push(`<b>${(avgGap/3).toFixed(1)}</b> (3 reels)`);
-        if (avgGap >= 120) fillers.push(`<b>${(avgGap/4).toFixed(1)}</b> (4 reels)`);
-        
-        let fillerStr = fillers.length > 0 ? `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ Try: ${fillers.join(' &nbsp;|&nbsp; ')}</div>` : '';
-        
-        let extraStr = '';
-        for (let i = k + 1; i <= Math.min(k + 6, 12); i++) {
-            let testSize = item.size * i;
-            if (testSize >= rule.min && testSize <= rule.max) {
-                 let extraReels = (i - k) * sets;
-                 extraStr = `<div style="font-size:12px; color:var(--amber); margin-top:2px;">↳ OR ask for <b>${extraReels} extra reels</b> of ${Number(item.size).toFixed(2)} to close this deckle perfectly.</div>`;
-                 break;
-            }
-        }
+          if (sets > 0) {
+            let printNames = [];
+            Object.keys(itemCounts).forEach(id => {
+                let origItem = items.find(a => a.id == id);
+                let text = `<b>${origItem.customer}</b> [${Number(origItem.size).toFixed(2)}]`;
+                if (itemCounts[id] > 1) text += ` x${itemCounts[id]}`;
+                printNames.push(text);
+            });
+            let namesStr = printNames.join(' &nbsp;,&nbsp; ');
+            let comboStrHtml = currentCombo.map(c => Number(c.size).toFixed(2)).join(' + ');
+            
+            let gsm = currentCombo[0].gsm;
+            let bf = currentCombo[0].bf;
+            let dia = currentCombo[0].dia;
 
-        if (gapMax < 5 && gapMin <= 0) {
-            // Perfect fit
-            suggestions.push(`
-            <div class="suggestion-item">
-                <div style="margin-bottom:4px;"><b>${item.customer}</b> <span style="font-size:11px; color:var(--sub);">[GSM ${item.gsm} | BF ${item.bf} | Dia ${item.dia}]</span></div>
-                <span style="color:var(--green); font-family:var(--mono);">${comboStr}</span> = <b style="color:var(--green);">PERFECT DECKLE</b> <i>- ${sets} Sets</i>
-            </div>`);
-        } else {
-            suggestions.push(`
-            <div class="suggestion-item">
-                <div style="margin-bottom:4px;"><b>${item.customer}</b> <span style="font-size:11px; color:var(--sub);">[GSM ${item.gsm} | BF ${item.bf} | Dia ${item.dia}]</span></div>
-                <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> + <b style="color:var(--red);">Need ${needStr}</b> <i>- ${sets} Sets</i>
+            let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
+            let avgGap = (Math.max(0, gapMin) + gapMax) / 2;
+            
+            // Generate split suggestions based on Sets
+            let fillers = [];
+            if (avgGap >= 30) fillers.push(`<b>${avgGap.toFixed(1)}</b> (${sets} reels)`);
+            if (avgGap >= 60) fillers.push(`<b>${(avgGap/2).toFixed(1)}</b> (${sets * 2} reels)`);
+            if (avgGap >= 90) fillers.push(`<b>${(avgGap/3).toFixed(1)}</b> (${sets * 3} reels)`);
+            
+            let fillerStr = fillers.length > 0 ? `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ Try size: ${fillers.join(' &nbsp;|&nbsp; ')}</div>` : '';
+
+            let html = `<div class="suggestion-item">
+                <div style="margin-bottom:4px;"><span style="font-size:11px; color:var(--sub);">GSM ${gsm} | BF ${bf} | Dia ${dia}</span> &nbsp;•&nbsp; <span style="font-size:12px; color:var(--text);">${namesStr}</span></div>
+                <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">Need ${needStr}</b> <i style="color:var(--amber);">- ${sets} Sets</i>
                 ${fillerStr}
-                ${extraStr}
-            </div>`);
+            </div>`;
+
+            suggestions.push({
+                score: (sets * currentSize) + currentCombo.length, 
+                html: html,
+                comboKey: currentCombo.map(c => c.id).sort().join('_') // deduplication key
+            });
+          }
         }
+      }
+
+      // Allow deep combinations to find best gaps
+      if (currentCombo.length >= 6) return;
+
+      for (let i = startIndex; i < items.length; i++) {
+        let item = items[i];
+        let newSize = currentSize + item.size;
+        if (newSize > rule.max) continue;
+
+        let countUsed = usedCounts[item.id] || 0;
+        if (item.reel < countUsed + 1) continue;
+
+        currentCombo.push(item);
+        usedCounts[item.id] = countUsed + 1;
+
+        search(i, currentCombo, newSize, usedCounts);
+
+        currentCombo.pop();
+        usedCounts[item.id] = countUsed;
+      }
+    }
+
+    for (let i = 0; i < items.length; i++) {
+      let used = {};
+      used[items[i].id] = 1;
+      search(i, [items[i]], items[i].size, used);
     }
   });
 
-  if (suggestions.length > 0) {
-    list.innerHTML = suggestions.join('');
+  // Deduplicate identical combinations to keep the list clean
+  let uniqueMap = new Map();
+  suggestions.forEach(s => {
+      if (!uniqueMap.has(s.comboKey) || uniqueMap.get(s.comboKey).score < s.score) {
+          uniqueMap.set(s.comboKey, s);
+      }
+  });
+
+  // Sort by highest impact score and take top 12
+  let finalSuggestions = Array.from(uniqueMap.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12)
+    .map(s => s.html);
+
+  if (finalSuggestions.length > 0) {
+    list.innerHTML = finalSuggestions.join('');
     board.style.display = 'block';
   } else {
     board.style.display = 'none';
