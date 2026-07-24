@@ -671,7 +671,7 @@
             <input type="text" id="addCust" placeholder="Customer Name">
             <input type="number" id="addGsm" placeholder="GSM">
             <input type="number" id="addBf" placeholder="BF">
-            <input type="number" id="addSize" placeholder="Size (mm)">
+            <input type="text" id="addSize" placeholder="Size (e.g. 100 or 39&quot;)">
             <input type="number" id="addReel" placeholder="Reels">
             <input type="text" id="addDia" placeholder="Dia">
         </div>
@@ -832,11 +832,23 @@ function handleFile(input, isAppend) {
         let gsm = parseField(gsmValRaw, true);
         let bf = parseField(bfValRaw, false);
         
-        let size = parseNumber(getVal(['size', 'deckle', 'mm', 'cm']));
+        let sizeRaw = String(getVal(['size', 'deckle', 'mm', 'cm', 'inch']) || '0').trim();
+        let size = 0;
+        let displaySize = sizeRaw;
+        
+        if (sizeRaw.includes('"') || sizeRaw.toLowerCase().includes('in')) {
+            let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
+            size = val * 2.54;
+            displaySize = val + '"';
+        } else {
+            size = parseFloat(sizeRaw.replace(/[^\d.-]/g, '')) || 0;
+            displaySize = size > 0 ? Number(size).toFixed(2) : '0';
+        }
+        
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let dia = getVal(['dia', 'shade']) || '-';
         
-        return { id: 0, customer, gsm, bf, size, reel, dia: String(dia), _selected: true };
+        return { id: 0, customer, gsm, bf, size, displaySize, reel, dia: String(dia), _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       if (isAppend) {
@@ -900,6 +912,17 @@ function updateData(id, field, value) {
         if (field === 'customer' || field === 'dia') {
             row[field] = value;
             if(vRow) vRow[field] = value;
+        } else if (field === 'size') {
+            let sizeRaw = String(value).trim();
+            if (sizeRaw.includes('"')) {
+                let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
+                row.size = val * 2.54;
+                row.displaySize = val + '"';
+            } else {
+                row.size = parseFloat(sizeRaw.replace(/[^\d.-]/g, '')) || 0;
+                row.displaySize = Number(row.size).toFixed(2);
+            }
+            if(vRow) { vRow.size = row.size; vRow.displaySize = row.displaySize; }
         } else {
             row[field] = parseFloat(value) || 0;
             if(vRow) vRow[field] = parseFloat(value) || 0;
@@ -947,13 +970,24 @@ function addManualOrder() {
   let cust = document.getElementById('addCust').value.trim() || 'Manual';
   let gsm = parseFloat(document.getElementById('addGsm').value) || 0;
   let bf = parseFloat(document.getElementById('addBf').value) || 0;
-  let size = parseFloat(document.getElementById('addSize').value) || 0;
+  let sizeRaw = document.getElementById('addSize').value.trim();
   let reel = parseFloat(document.getElementById('addReel').value) || 0;
   let dia = document.getElementById('addDia').value.trim() || '-';
 
-  if(!gsm || !bf || !size || !reel) {
+  if(!gsm || !bf || !sizeRaw || !reel) {
     toast('Please fill GSM, BF, Size, and Reels', true);
     return;
+  }
+
+  let size = 0;
+  let displaySize = sizeRaw;
+  if (sizeRaw.includes('"')) {
+      let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
+      size = val * 2.54;
+      displaySize = val + '"';
+  } else {
+      size = parseFloat(sizeRaw.replace(/[^\d.-]/g, '')) || 0;
+      displaySize = size > 0 ? Number(size).toFixed(2) : '0';
   }
 
   let newId = allRows.length > 0 ? Math.max(...allRows.map(r => r.id)) + 1 : 0;
@@ -964,6 +998,7 @@ function addManualOrder() {
     gsm: gsm,
     bf: bf,
     size: size,
+    displaySize: displaySize,
     reel: reel,
     dia: String(dia),
     _selected: true
@@ -1052,14 +1087,10 @@ function runMatch() {
             // FIFO Scoring: Older items have lower IDs. We prioritize consuming them.
             let ageScore = 0;
             currentCombo.forEach(c => {
-                // 10000000 is an arbitrary safe ceiling to invert the value so older IDs score higher.
                 ageScore += (10000000 - c.id); 
             });
             let totalAgeScore = ageScore * sets;
             
-            // Primary: Maximize reels processed (throughput)
-            // Secondary: Maximize FIFO (clear older inventory first)
-            // Tertiary: Maximize deckle fill (minimize waste)
             let score = (reelsProcessed * 10000000000) + (totalAgeScore * 1000) + currentSize;
             
             if (score > bestScore) {
@@ -1117,7 +1148,8 @@ function runMatch() {
           orig.reel -= (sets * itemCounts[id]);
         });
 
-        let sizeEquation = bestCombo.length > 1 ? bestCombo.map(c => Number(c.size).toFixed(2)).join(' + ') : '';
+        // Use displaySize to support visual inch markers
+        let sizeEquation = bestCombo.length > 1 ? bestCombo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ') : '';
         let totalSize = bestCombo.reduce((sum, c) => sum + c.size, 0);
 
         matchRows.push({
@@ -1148,6 +1180,7 @@ function runMatch() {
            unMatched.push({
               ...item,
               _size: item.size,
+              displaySize: item.displaySize,
               tons: (item.size / 2.54 * 12.2 * item.reel) / 1000,
               _match: false
            });
@@ -1270,7 +1303,7 @@ function updateSuggestionBoard() {
                     let used = itemCounts[id];
                     let extra = Math.max(0, used - origItem.reel);
                     
-                    let text = `<b>${origItem.customer}</b> [${Number(origItem.size).toFixed(2)}]`;
+                    let text = `<b>${origItem.customer}</b> [${origItem.displaySize || Number(origItem.size).toFixed(2)}]`;
                     if (used > 1) text += ` x${used}`;
                     
                     // RULE: Feature explicitly showing extra asked qty of existing size
@@ -1279,7 +1312,7 @@ function updateSuggestionBoard() {
                 });
                 
                 let namesStr = printNames.join(' &nbsp;,&nbsp; ');
-                let comboStrHtml = currentCombo.map(c => Number(c.size).toFixed(2)).join(' + ');
+                let comboStrHtml = currentCombo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ');
                 
                 let gsm = currentCombo[0].gsm;
                 let bf = currentCombo[0].bf;
@@ -1331,8 +1364,7 @@ function updateSuggestionBoard() {
                 }
 
                 // SCORING: Prioritize non-hypothetical combinations that eat up the most current size.
-                // Minor penalty for extra hypothetical reels ensures native matches rank higher,
-                // but still allows powerful hypothetical combinations to surface.
+                // Minor penalty for extra hypothetical reels ensures native matches rank higher.
                 let baseScore = (sets * currentSize) + (currentCombo.length * 10);
                 let finalScore = baseScore - (extraReelsCount * 20);
 
@@ -1546,7 +1578,7 @@ function renderTable() {
               ? `<input type="number" class="edit-input" style="width:50px; margin-right:4px;" value="${r.gsm}" onchange="updateData(${r.id}, 'gsm', this.value)"> / <input type="number" class="edit-input" style="width:40px; margin-left:4px;" value="${r.bf}" onchange="updateData(${r.id}, 'bf', this.value)">`
               : `${r.gsm} / ${r.bf}`;
               
-          let sizeCell = isEditingData ? `<input type="number" class="edit-input" style="width:60px;" value="${r.size}" onchange="updateData(${r.id}, 'size', this.value)">` : Number(r.size).toFixed(2);
+          let sizeCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value='${r.displaySize || Number(r.size).toFixed(2)}' onchange="updateData(${r.id}, 'size', this.value)">` : (r.displaySize || Number(r.size).toFixed(2));
           let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:50px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
           let diaCell = isEditingData ? `<input type="text" class="edit-input" style="width:50px;" value="${r.dia}" onchange="updateData(${r.id}, 'dia', this.value)">` : (r.dia || '-');
             
@@ -1592,7 +1624,7 @@ function renderTable() {
 
         custHtml = uniqueItems.map((c, i) => {
           let totalReelsUsedInCombo = c.count * r.reel;
-          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${Number(c.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
+          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
         }).join('');
         
         gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
@@ -1611,7 +1643,7 @@ function renderTable() {
         </td>
         <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
           ${r._match && r.combo_str ? `<div style="font-size:14px; color:var(--accent); margin-bottom:8px; font-weight:900; letter-spacing:0.5px; background:rgba(79,142,247,0.1); padding:6px 10px; border-radius:6px; display:inline-block; border: 1px solid rgba(79,142,247,0.3);">${r.combo_str}</div>` : ''}
-          <div style="font-size:16px; font-weight:bold; color:var(--green);">${Number(r._size || r.size).toFixed(2)}</div>
+          <div style="font-size:16px; font-weight:bold; color:var(--green);">${r._match ? Number(r._size).toFixed(2) : (r.displaySize || Number(r.size).toFixed(2))}</div>
         </td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.dia || '-'}</td>
@@ -1639,7 +1671,7 @@ function exportPDF() {
       if (viewMode === 'data') {
           title = "Manage Data";
           head = [['Customer', 'GSM / BF', 'Size', 'Reels', 'Dia', 'Tons']];
-          body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
+          body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
           head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets', 'Dia', 'Tons']];
@@ -1647,7 +1679,7 @@ function exportPDF() {
           body = viewRows.map(r => {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm} / ${r.bf}`;
-              let sizeStr = Number(r._size || r.size).toFixed(2);
+              let sizeStr = r.displaySize || Number(r._size || r.size).toFixed(2);
               
               if (r._match && r.comboData) {
                   let groupedCombo = {};
@@ -1658,7 +1690,7 @@ function exportPDF() {
                   let uniqueItems = Object.values(groupedCombo);
                   
                   // Construct clean multi-line string for PDF cells
-                  custStr = uniqueItems.map(c => `${c.customer} [${Number(c.size).toFixed(2)}] (${c.count * r.reel})`).join('\n');
+                  custStr = uniqueItems.map(c => `${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${c.count * r.reel})`).join('\n');
                   sizeStr = r.combo_str ? `${r.combo_str}\nTotal: ${Number(r._size).toFixed(2)}` : `${Number(r._size).toFixed(2)}`;
               }
               
