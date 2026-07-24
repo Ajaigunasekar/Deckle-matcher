@@ -1048,7 +1048,19 @@ function runMatch() {
 
           if (sets > 0) {
             let reelsProcessed = sets * currentCombo.length;
-            let score = (reelsProcessed * 10000) + currentSize;
+            
+            // FIFO Scoring: Older items have lower IDs. We prioritize consuming them.
+            let ageScore = 0;
+            currentCombo.forEach(c => {
+                // 10000000 is an arbitrary safe ceiling to invert the value so older IDs score higher.
+                ageScore += (10000000 - c.id); 
+            });
+            let totalAgeScore = ageScore * sets;
+            
+            // Primary: Maximize reels processed (throughput)
+            // Secondary: Maximize FIFO (clear older inventory first)
+            // Tertiary: Maximize deckle fill (minimize waste)
+            let score = (reelsProcessed * 10000000000) + (totalAgeScore * 1000) + currentSize;
             
             if (score > bestScore) {
               bestScore = score;
