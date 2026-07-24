@@ -836,7 +836,8 @@ function handleFile(input, isAppend) {
         let size = 0;
         let displaySize = sizeRaw;
         
-        if (sizeRaw.includes('"') || sizeRaw.toLowerCase().includes('in')) {
+        let isInch = sizeRaw.includes('"') || sizeRaw.includes('”') || sizeRaw.includes('“') || sizeRaw.toLowerCase().includes('in');
+        if (isInch) {
             let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
             size = val * 2.54;
             displaySize = val + '"';
@@ -914,7 +915,8 @@ function updateData(id, field, value) {
             if(vRow) vRow[field] = value;
         } else if (field === 'size') {
             let sizeRaw = String(value).trim();
-            if (sizeRaw.includes('"')) {
+            let isInch = sizeRaw.includes('"') || sizeRaw.includes('”') || sizeRaw.includes('“') || sizeRaw.toLowerCase().includes('in');
+            if (isInch) {
                 let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
                 row.size = val * 2.54;
                 row.displaySize = val + '"';
@@ -981,7 +983,8 @@ function addManualOrder() {
 
   let size = 0;
   let displaySize = sizeRaw;
-  if (sizeRaw.includes('"')) {
+  let isInch = sizeRaw.includes('"') || sizeRaw.includes('”') || sizeRaw.includes('“') || sizeRaw.toLowerCase().includes('in');
+  if (isInch) {
       let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
       size = val * 2.54;
       displaySize = val + '"';
@@ -1578,7 +1581,8 @@ function renderTable() {
               ? `<input type="number" class="edit-input" style="width:50px; margin-right:4px;" value="${r.gsm}" onchange="updateData(${r.id}, 'gsm', this.value)"> / <input type="number" class="edit-input" style="width:40px; margin-left:4px;" value="${r.bf}" onchange="updateData(${r.id}, 'bf', this.value)">`
               : `${r.gsm} / ${r.bf}`;
               
-          let sizeCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value='${r.displaySize || Number(r.size).toFixed(2)}' onchange="updateData(${r.id}, 'size', this.value)">` : (r.displaySize || Number(r.size).toFixed(2));
+          let safeSizeVal = String(r.displaySize || Number(r.size).toFixed(2)).replace(/"/g, '&quot;');
+          let sizeCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${safeSizeVal}" onchange="updateData(${r.id}, 'size', this.value)">` : (r.displaySize || Number(r.size).toFixed(2));
           let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:50px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
           let diaCell = isEditingData ? `<input type="text" class="edit-input" style="width:50px;" value="${r.dia}" onchange="updateData(${r.id}, 'dia', this.value)">` : (r.dia || '-');
             
