@@ -735,6 +735,21 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
 <script>
+// ── Helper ─────────────────────────────────────────────────────────────────
+function parseSizeInput(valStr) {
+    let str = String(valStr).toLowerCase().trim();
+    // Catch ANY standard or smart quote, or text abbreviation
+    let isInch = str.includes('"') || str.includes('”') || str.includes('“') || 
+                 str.includes('″') || str.includes("''") || str.includes('in');
+    
+    let num = parseFloat(str.replace(/[^\d.-]/g, '')) || 0;
+    
+    if (isInch && num > 0) {
+        return { size: num * 2.54, displaySize: num + '"' };
+    }
+    return { size: num, displaySize: num > 0 ? num.toFixed(2) : '0' };
+}
+
 // ── Sidebar Toggle Logic ───────────────────────────────────────────────────
 function toggleSidebar() {
   document.querySelector('.main').classList.toggle('sidebar-hidden');
@@ -832,24 +847,13 @@ function handleFile(input, isAppend) {
         let gsm = parseField(gsmValRaw, true);
         let bf = parseField(bfValRaw, false);
         
-        let sizeRaw = String(getVal(['size', 'deckle', 'mm', 'cm', 'inch']) || '0').trim();
-        let size = 0;
-        let displaySize = sizeRaw;
-        
-        let isInch = sizeRaw.includes('"') || sizeRaw.includes('”') || sizeRaw.includes('“') || sizeRaw.toLowerCase().includes('in');
-        if (isInch) {
-            let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
-            size = val * 2.54;
-            displaySize = val + '"';
-        } else {
-            size = parseFloat(sizeRaw.replace(/[^\d.-]/g, '')) || 0;
-            displaySize = size > 0 ? Number(size).toFixed(2) : '0';
-        }
+        let sizeRaw = String(getVal(['size', 'deckle', 'mm', 'cm', 'inch']) || '0');
+        let parsed = parseSizeInput(sizeRaw);
         
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let dia = getVal(['dia', 'shade']) || '-';
         
-        return { id: 0, customer, gsm, bf, size, displaySize, reel, dia: String(dia), _selected: true };
+        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, reel, dia: String(dia), _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       if (isAppend) {
@@ -914,16 +918,9 @@ function updateData(id, field, value) {
             row[field] = value;
             if(vRow) vRow[field] = value;
         } else if (field === 'size') {
-            let sizeRaw = String(value).trim();
-            let isInch = sizeRaw.includes('"') || sizeRaw.includes('”') || sizeRaw.includes('“') || sizeRaw.toLowerCase().includes('in');
-            if (isInch) {
-                let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
-                row.size = val * 2.54;
-                row.displaySize = val + '"';
-            } else {
-                row.size = parseFloat(sizeRaw.replace(/[^\d.-]/g, '')) || 0;
-                row.displaySize = Number(row.size).toFixed(2);
-            }
+            let parsed = parseSizeInput(value);
+            row.size = parsed.size;
+            row.displaySize = parsed.displaySize;
             if(vRow) { vRow.size = row.size; vRow.displaySize = row.displaySize; }
         } else {
             row[field] = parseFloat(value) || 0;
@@ -972,26 +969,16 @@ function addManualOrder() {
   let cust = document.getElementById('addCust').value.trim() || 'Manual';
   let gsm = parseFloat(document.getElementById('addGsm').value) || 0;
   let bf = parseFloat(document.getElementById('addBf').value) || 0;
-  let sizeRaw = document.getElementById('addSize').value.trim();
+  let sizeRaw = document.getElementById('addSize').value;
   let reel = parseFloat(document.getElementById('addReel').value) || 0;
   let dia = document.getElementById('addDia').value.trim() || '-';
 
-  if(!gsm || !bf || !sizeRaw || !reel) {
+  if(!gsm || !bf || !sizeRaw.trim() || !reel) {
     toast('Please fill GSM, BF, Size, and Reels', true);
     return;
   }
 
-  let size = 0;
-  let displaySize = sizeRaw;
-  let isInch = sizeRaw.includes('"') || sizeRaw.includes('”') || sizeRaw.includes('“') || sizeRaw.toLowerCase().includes('in');
-  if (isInch) {
-      let val = parseFloat(sizeRaw.replace(/[^\d.-]/g, ''));
-      size = val * 2.54;
-      displaySize = val + '"';
-  } else {
-      size = parseFloat(sizeRaw.replace(/[^\d.-]/g, '')) || 0;
-      displaySize = size > 0 ? Number(size).toFixed(2) : '0';
-  }
+  let parsed = parseSizeInput(sizeRaw);
 
   let newId = allRows.length > 0 ? Math.max(...allRows.map(r => r.id)) + 1 : 0;
   
@@ -1000,8 +987,8 @@ function addManualOrder() {
     customer: cust,
     gsm: gsm,
     bf: bf,
-    size: size,
-    displaySize: displaySize,
+    size: parsed.size,
+    displaySize: parsed.displaySize,
     reel: reel,
     dia: String(dia),
     _selected: true
