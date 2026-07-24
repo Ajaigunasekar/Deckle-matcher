@@ -1229,71 +1229,90 @@ function updateSuggestionBoard() {
           let itemCounts = {};
           currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
           
-          // Max sets possible for this specific combination
-          let sets = Math.min(...Object.keys(itemCounts).map(id => {
+          let isHypothetical = false;
+          let extraReelsCount = 0;
+          let sets = Infinity;
+
+          Object.keys(itemCounts).forEach(id => {
             let origItem = items.find(a => a.id == id);
-            return Math.floor(origItem.reel / itemCounts[id]);
-          }));
-
-          if (sets > 0) {
-            let printNames = [];
-            Object.keys(itemCounts).forEach(id => {
-                let origItem = items.find(a => a.id == id);
-                let text = `<b>${origItem.customer}</b> [${Number(origItem.size).toFixed(2)}]`;
-                if (itemCounts[id] > 1) text += ` x${itemCounts[id]}`;
-                printNames.push(text);
-            });
-            let namesStr = printNames.join(' &nbsp;,&nbsp; ');
-            let comboStrHtml = currentCombo.map(c => Number(c.size).toFixed(2)).join(' + ');
-            
-            let gsm = currentCombo[0].gsm;
-            let bf = currentCombo[0].bf;
-            let dia = currentCombo[0].dia;
-
-            let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
-            
-            // Generate split suggestions only if gapMax > 120
-            let fillerStr = '';
-            if (gapMax > 120) {
-                let fillers = [];
-                // Split by 2
-                let split2Min = gapMin > 0 ? gapMin / 2 : 0;
-                let split2Max = gapMax / 2;
-                fillers.push(`<b>${split2Min.toFixed(2)} to ${split2Max.toFixed(2)}</b> (${sets * 2} reels)`);
-
-                // Split by 3
-                if (gapMax > 180) {
-                    let split3Min = gapMin > 0 ? gapMin / 3 : 0;
-                    let split3Max = gapMax / 3;
-                    fillers.push(`<b>${split3Min.toFixed(2)} to ${split3Max.toFixed(2)}</b> (${sets * 3} reels)`);
+            if (itemCounts[id] > origItem.reel) {
+                isHypothetical = true;
+                extraReelsCount += (itemCounts[id] - origItem.reel);
+            } else {
+                if (!isHypothetical) {
+                    sets = Math.min(sets, Math.floor(origItem.reel / itemCounts[id]));
                 }
-                
-                // Split by 4
-                if (gapMax > 240) {
-                    let split4Min = gapMin > 0 ? gapMin / 4 : 0;
-                    let split4Max = gapMax / 4;
-                    fillers.push(`<b>${split4Min.toFixed(2)} to ${split4Max.toFixed(2)}</b> (${sets * 4} reels)`);
-                }
-
-                fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
             }
+          });
 
-            let html = `<div class="suggestion-item">
-                <div style="margin-bottom:4px;"><span style="font-size:11px; color:var(--sub);">GSM ${gsm} | BF ${bf} | Dia ${dia}</span> &nbsp;•&nbsp; <span style="font-size:12px; color:var(--text);">${namesStr}</span></div>
-                <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">Need ${needStr} (${sets} reels)</b>
-                ${fillerStr}
-            </div>`;
+          // Limit extra asks to max 4 reels total to keep suggestions realistic
+          if (!isHypothetical || extraReelsCount <= 4) {
+              if (isHypothetical) sets = 1; // It's a hypothetical custom single-set request
 
-            suggestions.push({
-                score: (sets * currentSize) + currentCombo.length, 
-                html: html,
-                comboKey: currentCombo.map(c => c.id).sort().join('_') // deduplication key
-            });
+              if (sets > 0 && sets !== Infinity) {
+                let printNames = [];
+                Object.keys(itemCounts).forEach(id => {
+                    let origItem = items.find(a => a.id == id);
+                    let used = itemCounts[id];
+                    let extra = Math.max(0, used - origItem.reel);
+                    let text = `<b>${origItem.customer}</b> [${Number(origItem.size).toFixed(2)}]`;
+                    if (used > 1) text += ` x${used}`;
+                    if (extra > 0) text += ` <span style="color:var(--amber);">(Ask +${extra} reel)</span>`;
+                    printNames.push(text);
+                });
+                let namesStr = printNames.join(' &nbsp;,&nbsp; ');
+                let comboStrHtml = currentCombo.map(c => Number(c.size).toFixed(2)).join(' + ');
+                
+                let gsm = currentCombo[0].gsm;
+                let bf = currentCombo[0].bf;
+                let dia = currentCombo[0].dia;
+
+                // Explicitly format reel output
+                let reelText = `(${sets} reel${sets > 1 ? 's' : ''})`;
+                let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
+                
+                // Only split sizes if the Gap is strictly greater than 120mm
+                let fillerStr = '';
+                if (gapMax > 120) {
+                    let fillers = [];
+                    let split2Min = gapMin > 0 ? gapMin / 2 : 0;
+                    let split2Max = gapMax / 2;
+                    fillers.push(`<b>${split2Min.toFixed(2)} to ${split2Max.toFixed(2)}</b> (${sets * 2} reels)`);
+
+                    if (gapMax > 180) {
+                        let split3Min = gapMin > 0 ? gapMin / 3 : 0;
+                        let split3Max = gapMax / 3;
+                        fillers.push(`<b>${split3Min.toFixed(2)} to ${split3Max.toFixed(2)}</b> (${sets * 3} reels)`);
+                    }
+                    if (gapMax > 240) {
+                        let split4Min = gapMin > 0 ? gapMin / 4 : 0;
+                        let split4Max = gapMax / 4;
+                        fillers.push(`<b>${split4Min.toFixed(2)} to ${split4Max.toFixed(2)}</b> (${sets * 4} reels)`);
+                    }
+                    fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
+                }
+
+                // Score: prioritize non-hypothetical combinations first
+                let baseScore = (sets * currentSize) + currentCombo.length;
+                let finalScore = isHypothetical ? baseScore - (extraReelsCount * 1000) : baseScore;
+
+                let html = `<div class="suggestion-item">
+                    <div style="margin-bottom:4px;"><span style="font-size:11px; color:var(--sub);">GSM ${gsm} | BF ${bf} | Dia ${dia}</span> &nbsp;•&nbsp; <span style="font-size:12px; color:var(--text);">${namesStr}</span></div>
+                    <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">Need ${needStr} ${reelText}</b>
+                    ${fillerStr}
+                </div>`;
+
+                suggestions.push({
+                    score: finalScore, 
+                    html: html,
+                    comboKey: currentCombo.map(c => c.id).sort().join('_') // deduplication key
+                });
+              }
           }
         }
       }
 
-      // Allow deep combinations to find best gaps
+      // Deep combination search
       if (currentCombo.length >= 6) return;
 
       for (let i = startIndex; i < items.length; i++) {
@@ -1302,8 +1321,9 @@ function updateSuggestionBoard() {
         if (newSize > rule.max) continue;
 
         let countUsed = usedCounts[item.id] || 0;
-        if (item.reel < countUsed + 1) continue;
-
+        
+        // Removed inventory limit to allow hypothetical extra reel combinations
+        
         currentCombo.push(item);
         usedCounts[item.id] = countUsed + 1;
 
@@ -1321,7 +1341,7 @@ function updateSuggestionBoard() {
     }
   });
 
-  // Deduplicate identical combinations to keep the list clean
+  // Deduplicate identical combinations
   let uniqueMap = new Map();
   suggestions.forEach(s => {
       if (!uniqueMap.has(s.comboKey) || uniqueMap.get(s.comboKey).score < s.score) {
@@ -1329,10 +1349,10 @@ function updateSuggestionBoard() {
       }
   });
 
-  // Sort by highest impact score and take top 12
+  // Sort by highest impact score and limit list
   let finalSuggestions = Array.from(uniqueMap.values())
     .sort((a, b) => b.score - a.score)
-    .slice(0, 12)
+    .slice(0, 15)
     .map(s => s.html);
 
   if (finalSuggestions.length > 0) {
