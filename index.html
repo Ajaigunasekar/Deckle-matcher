@@ -1220,12 +1220,14 @@ function updateSuggestionBoard() {
   // 2. Find combinations across multiple customers within each group
   Object.values(groups).forEach(items => {
     function search(startIndex, currentCombo, currentSize, usedCounts) {
-      if (currentCombo.length > 0) {
+      
+      // RULE: Only analyze combinations that have a MINIMUM of 2 side-by-side reels
+      if (currentCombo.length >= 2) {
         let gapMin = rule.min - currentSize;
         let gapMax = rule.max - currentSize;
 
         // Only suggest if there's a practical gap to fill
-        if (gapMax >= 30) {
+        if (gapMax >= 0) {
           let itemCounts = {};
           currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
           
@@ -1245,9 +1247,9 @@ function updateSuggestionBoard() {
             }
           });
 
-          // Limit extra asks to max 4 reels total to keep suggestions realistic
-          if (!isHypothetical || extraReelsCount <= 4) {
-              if (isHypothetical) sets = 1; // It's a hypothetical custom single-set request
+          // RULE: Cap hypothetical extra reels so the suggestions remain realistic
+          if (extraReelsCount <= 4) {
+              if (isHypothetical) sets = 1; // Creates 1 custom run based on the specific extra reels asked
 
               if (sets > 0 && sets !== Infinity) {
                 let printNames = [];
@@ -1255,11 +1257,15 @@ function updateSuggestionBoard() {
                     let origItem = items.find(a => a.id == id);
                     let used = itemCounts[id];
                     let extra = Math.max(0, used - origItem.reel);
+                    
                     let text = `<b>${origItem.customer}</b> [${Number(origItem.size).toFixed(2)}]`;
                     if (used > 1) text += ` x${used}`;
-                    if (extra > 0) text += ` <span style="color:var(--amber);">(Ask +${extra} reel)</span>`;
+                    
+                    // RULE: Feature explicitly showing extra asked qty of existing size
+                    if (extra > 0) text += ` <span style="color:var(--amber);">(Ask +${extra} extra)</span>`;
                     printNames.push(text);
                 });
+                
                 let namesStr = printNames.join(' &nbsp;,&nbsp; ');
                 let comboStrHtml = currentCombo.map(c => Number(c.size).toFixed(2)).join(' + ');
                 
@@ -1267,42 +1273,56 @@ function updateSuggestionBoard() {
                 let bf = currentCombo[0].bf;
                 let dia = currentCombo[0].dia;
 
-                // Explicitly format reel output
+                // RULE: Completely removed the word "Sets" from output
                 let reelText = `(${sets} reel${sets > 1 ? 's' : ''})`;
-                let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
-                let mainNeedStr = `Need ${needStr} ${reelText}`;
-                
-                // Only split sizes if the Gap is strictly greater than 120mm
-                let fillerStr = '';
-                if (gapMax > 125) {
-                    let fillers = [];
-                    let split2Min = gapMin > 0 ? gapMin / 2 : 0;
-                    let split2Max = gapMax / 2;
-                    fillers.push(`<b>${split2Min.toFixed(2)} to ${split2Max.toFixed(2)}</b> (${sets * 2} reels)`);
+                let mainNeedStr = "";
+                let fillerStr = "";
 
-                    if (gapMax > 180) {
-                        let split3Min = gapMin > 0 ? gapMin / 3 : 0;
-                        let split3Max = gapMax / 3;
-                        fillers.push(`<b>${split3Min.toFixed(2)} to ${split3Max.toFixed(2)}</b> (${sets * 3} reels)`);
-                    }
-                    if (gapMax > 240) {
-                        let split4Min = gapMin > 0 ? gapMin / 4 : 0;
-                        let split4Max = gapMax / 4;
-                        fillers.push(`<b>${split4Min.toFixed(2)} to ${split4Max.toFixed(2)}</b> (${sets * 4} reels)`);
-                    }
+                if (gapMax >= 0 && gapMin <= 0) {
+                    mainNeedStr = "PERFECT DECKLE";
+                } else {
+                    let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
                     
+                    // RULE: If gap is > 200, strictly ONLY split it.
                     if (gapMax > 200) {
-                        // For massive gaps > 200, hide the raw gap and ONLY show the realistic splits
+                        let fillers = [];
+                        let split2Min = gapMin > 0 ? gapMin / 2 : 0;
+                        fillers.push(`<b>${split2Min.toFixed(2)} to ${(gapMax/2).toFixed(2)}</b> (${sets * 2} reels)`);
+                        
+                        if (gapMax > 180) { // Keep standard split logic bounds
+                            let split3Min = gapMin > 0 ? gapMin / 3 : 0;
+                            fillers.push(`<b>${split3Min.toFixed(2)} to ${(gapMax/3).toFixed(2)}</b> (${sets * 3} reels)`);
+                        }
+                        if (gapMax > 240) {
+                            let split4Min = gapMin > 0 ? gapMin / 4 : 0;
+                            fillers.push(`<b>${split4Min.toFixed(2)} to ${(gapMax/4).toFixed(2)}</b> (${sets * 4} reels)`);
+                        }
                         mainNeedStr = `Need split sizes: ${fillers.join(' &nbsp;OR&nbsp; ')}`;
-                    } else {
-                        // For gaps between 125 and 200, show both the raw gap and the split alternatives
-                        fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
+                    } 
+                    // RULE: If gap is between 125 and 200, show raw gap AND split options.
+                    else if (gapMax > 125) {
+                        mainNeedStr = `Need ${needStr} ${reelText}`;
+                        let fillers = [];
+                        let split2Min = gapMin > 0 ? gapMin / 2 : 0;
+                        fillers.push(`<b>${split2Min.toFixed(2)} to ${(gapMax/2).toFixed(2)}</b> (${sets * 2} reels)`);
+                        
+                        if (gapMax > 180) {
+                            let split3Min = gapMin > 0 ? gapMin / 3 : 0;
+                            fillers.push(`<b>${split3Min.toFixed(2)} to ${(gapMax/3).toFixed(2)}</b> (${sets * 3} reels)`);
+                        }
+                        fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try split sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
+                    } 
+                    // RULE: If gap is < 125, strictly DO NOT split it. Just show raw gap.
+                    else {
+                        mainNeedStr = `Need ${needStr} ${reelText}`;
                     }
                 }
 
-                // Score: prioritize non-hypothetical combinations first
-                let baseScore = (sets * currentSize) + currentCombo.length;
-                let finalScore = isHypothetical ? baseScore - (extraReelsCount * 1000) : baseScore;
+                // SCORING: Prioritize non-hypothetical combinations that eat up the most current size.
+                // Minor penalty for extra hypothetical reels ensures native matches rank higher,
+                // but still allows powerful hypothetical combinations to surface.
+                let baseScore = (sets * currentSize) + (currentCombo.length * 10);
+                let finalScore = baseScore - (extraReelsCount * 20);
 
                 let html = `<div class="suggestion-item">
                     <div style="margin-bottom:4px;"><span style="font-size:11px; color:var(--sub);">GSM ${gsm} | BF ${bf} | Dia ${dia}</span> &nbsp;•&nbsp; <span style="font-size:12px; color:var(--text);">${namesStr}</span></div>
@@ -1320,8 +1340,8 @@ function updateSuggestionBoard() {
         }
       }
 
-      // Deep combination search
-      if (currentCombo.length >= 6) return;
+      // Allow deep combinations to find best gaps
+      if (currentCombo.length >= 7) return;
 
       for (let i = startIndex; i < items.length; i++) {
         let item = items[i];
@@ -1330,8 +1350,9 @@ function updateSuggestionBoard() {
 
         let countUsed = usedCounts[item.id] || 0;
         
-        // Removed inventory limit to allow hypothetical extra reel combinations
-        
+        // RULE: Limit to max 4 extra hypothetical reels per item to avoid infinite calculation loops
+        if (countUsed >= item.reel + 4) continue; 
+
         currentCombo.push(item);
         usedCounts[item.id] = countUsed + 1;
 
@@ -1349,7 +1370,7 @@ function updateSuggestionBoard() {
     }
   });
 
-  // Deduplicate identical combinations
+  // Deduplicate identical combinations to keep the list clean
   let uniqueMap = new Map();
   suggestions.forEach(s => {
       if (!uniqueMap.has(s.comboKey) || uniqueMap.get(s.comboKey).score < s.score) {
@@ -1357,7 +1378,7 @@ function updateSuggestionBoard() {
       }
   });
 
-  // Sort by highest impact score and limit list
+  // Sort by highest impact score and take top 15 suggestions
   let finalSuggestions = Array.from(uniqueMap.values())
     .sort((a, b) => b.score - a.score)
     .slice(0, 15)
