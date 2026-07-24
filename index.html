@@ -1270,10 +1270,11 @@ function updateSuggestionBoard() {
                 // Explicitly format reel output
                 let reelText = `(${sets} reel${sets > 1 ? 's' : ''})`;
                 let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
+                let mainNeedStr = `Need ${needStr} ${reelText}`;
                 
                 // Only split sizes if the Gap is strictly greater than 120mm
                 let fillerStr = '';
-                if (gapMax > 120) {
+                if (gapMax > 125) {
                     let fillers = [];
                     let split2Min = gapMin > 0 ? gapMin / 2 : 0;
                     let split2Max = gapMax / 2;
@@ -1289,7 +1290,14 @@ function updateSuggestionBoard() {
                         let split4Max = gapMax / 4;
                         fillers.push(`<b>${split4Min.toFixed(2)} to ${split4Max.toFixed(2)}</b> (${sets * 4} reels)`);
                     }
-                    fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
+                    
+                    if (gapMax > 200) {
+                        // For massive gaps > 200, hide the raw gap and ONLY show the realistic splits
+                        mainNeedStr = `Need split sizes: ${fillers.join(' &nbsp;OR&nbsp; ')}`;
+                    } else {
+                        // For gaps between 125 and 200, show both the raw gap and the split alternatives
+                        fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
+                    }
                 }
 
                 // Score: prioritize non-hypothetical combinations first
@@ -1298,7 +1306,7 @@ function updateSuggestionBoard() {
 
                 let html = `<div class="suggestion-item">
                     <div style="margin-bottom:4px;"><span style="font-size:11px; color:var(--sub);">GSM ${gsm} | BF ${bf} | Dia ${dia}</span> &nbsp;•&nbsp; <span style="font-size:12px; color:var(--text);">${namesStr}</span></div>
-                    <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">Need ${needStr} ${reelText}</b>
+                    <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">${mainNeedStr}</b>
                     ${fillerStr}
                 </div>`;
 
