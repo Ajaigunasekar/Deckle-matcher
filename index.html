@@ -735,13 +735,21 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
 <script>
-// ── Helper ─────────────────────────────────────────────────────────────────
+// ── Universal Size Parser (CM / Inches) ────────────────────────────────────
 function parseSizeInput(valStr) {
+    if (!valStr) return { size: 0, displaySize: '0' };
     let str = String(valStr).toLowerCase().trim();
-    // Catch ANY standard or smart quote, or text abbreviation
-    let isInch = str.includes('"') || str.includes('”') || str.includes('“') || 
-                 str.includes('″') || str.includes("''") || str.includes('in');
     
+    // Broad check for ANY quote-like character, prime, or 'in' abbreviation
+    let isInch = str.includes('"') || 
+                 str.includes('”') || 
+                 str.includes('“') || 
+                 str.includes('″') || 
+                 str.includes("'") || 
+                 str.includes('’') || 
+                 str.includes('‘') || 
+                 str.includes('in');
+                 
     let num = parseFloat(str.replace(/[^\d.-]/g, '')) || 0;
     
     if (isInch && num > 0) {
