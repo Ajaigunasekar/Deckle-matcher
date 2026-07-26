@@ -158,6 +158,23 @@
     gap: 8px;
     word-break: break-all;
   }
+  
+  .info-icon {
+    background: var(--card2);
+    color: var(--accent);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 6px;
+    border: 1px solid var(--border);
+  }
+  .info-icon:active { background: var(--accent); color: #fff; }
 
   /* Deckle selector */
   select {
@@ -447,7 +464,7 @@
     justify-content: space-between;
     gap: 12px;
   }
-  .rule-name { font-weight: 600; font-size: 14px; }
+  .rule-name { font-weight: 600; font-size: 14px; word-break: break-all; }
   .rule-range { font-family: var(--mono); font-size: 12px; color: var(--sub); margin-top: 2px; }
   .rule-actions { display: flex; gap: 8px; flex-shrink: 0; }
   
@@ -576,7 +593,8 @@
       <!-- Loaded State & Append More Data Button -->
       <div id="fileLoadedBlock" style="display:none;" class="file-loaded-block">
         <div class="file-badge show">
-          <span>✓</span><span id="fileName">Data Loaded</span>
+          <span>✓</span>
+          <span id="fileName" style="display:flex; align-items:center;">Data Loaded</span>
         </div>
         <button class="btn-secondary" onclick="document.getElementById('appendInput').click()" style="font-size:12px; min-height:36px; padding:8px; border-color:var(--accent); color:var(--accent);">
           ➕ Add Another File
@@ -662,6 +680,9 @@
       <button id="btnEditData" class="btn-secondary" onclick="toggleEditMode()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; margin-left: 8px;">
         ✏️ Edit
       </button>
+      <button id="btnExportCSV" class="btn-secondary" onclick="exportUnmatchedExcel()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; margin-left: 8px; border-color: var(--green); color: var(--green);">
+        ⬇ Export Excel
+      </button>
     </div>
     
     <!-- Manual Data Entry Form -->
@@ -726,6 +747,18 @@
   </div>
 </div>
 
+<!-- Uploaded Files Modal -->
+<div class="modal-overlay" id="fileModalOverlay" onclick="handleFileOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📂 LOADED FILES</div>
+    <div class="rule-list" id="fileList"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="closeFileModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -770,6 +803,7 @@ let rules = JSON.parse(localStorage.getItem('deckleRules') || 'null') || [
 let allRows   = [];   
 let matchRows = [];   
 let viewRows  = [];   
+let loadedFiles = []; // Tracks uploaded file names
 let currentFilter = 'all';
 let sortKey   = null;
 let sortAsc   = true;
@@ -790,6 +824,16 @@ function refreshSelect() {
   ).join('');
   const idx = rules.findIndex((r, i) => `${i}` === cur);
   if (idx >= 0) sel.value = idx;
+}
+
+// ── Update File Badge UI ───────────────────────────────────────────────────
+function updateFileBadge() {
+    if (loadedFiles.length === 0) {
+        clearAll();
+        return;
+    }
+    let fText = loadedFiles.length > 1 ? "Multiple Files Loaded" : loadedFiles[0];
+    document.getElementById('fileName').innerHTML = `${fText} <span class="info-icon" onclick="openFileModal()">i</span>`;
 }
 
 // ── File upload ────────────────────────────────────────────────────────────
@@ -816,6 +860,14 @@ function handleFile(input, isAppend) {
         const wb = XLSX.read(e.target.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      }
+
+      // Track file
+      let currentFileName = file.name;
+      if (!isAppend) {
+          loadedFiles = [currentFileName];
+      } else {
+          if (!loadedFiles.includes(currentFileName)) loadedFiles.push(currentFileName);
       }
 
       // ── ROBUST COLUMN MATCHING ──
@@ -861,7 +913,7 @@ function handleFile(input, isAppend) {
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let dia = getVal(['dia', 'shade']) || '-';
         
-        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, reel, dia: String(dia), _selected: true };
+        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, reel, dia: String(dia), fileName: currentFileName, _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       if (isAppend) {
@@ -869,16 +921,15 @@ function handleFile(input, isAppend) {
           newRows.forEach(r => r.id = ++maxId);
           allRows = [...allRows, ...newRows];
           toast(`✓ Appended ${newRows.length} more orders`);
-          document.getElementById('fileName').textContent = "Multiple Files Loaded";
       } else {
           newRows.forEach((r, i) => r.id = i);
           allRows = newRows;
           toast(`✓ Loaded ${allRows.length} valid orders`);
-          document.getElementById('fileName').textContent = file.name;
       }
       
       document.getElementById('uploadZone').style.display = 'none';
       document.getElementById('fileLoadedBlock').style.display = 'flex';
+      updateFileBadge();
       
       input.value = ''; // Reset so the same file can be selected again if needed
       showDataPage();
@@ -987,6 +1038,13 @@ function addManualOrder() {
   }
 
   let parsed = parseSizeInput(sizeRaw);
+  
+  if (!loadedFiles.includes('Manual Entry')) {
+      loadedFiles.push('Manual Entry');
+      document.getElementById('uploadZone').style.display = 'none';
+      document.getElementById('fileLoadedBlock').style.display = 'flex';
+      updateFileBadge();
+  }
 
   let newId = allRows.length > 0 ? Math.max(...allRows.map(r => r.id)) + 1 : 0;
   
@@ -999,6 +1057,7 @@ function addManualOrder() {
     displaySize: parsed.displaySize,
     reel: reel,
     dia: String(dia),
+    fileName: 'Manual Entry',
     _selected: true
   });
 
@@ -1492,6 +1551,31 @@ function sortTable(key) {
   renderTable();
 }
 
+// ── Export Unmatched Excel ─────────────────────────────────────────────────
+function exportUnmatchedExcel() {
+  if (!viewRows.length || currentFilter !== 'nomatch') return;
+  
+  try {
+      let exportData = viewRows.map(r => ({
+          "Customer": r.customer,
+          "GSM": r.gsm,
+          "BF": r.bf,
+          "Size": r.displaySize || Number(r.size).toFixed(2),
+          "Reels": r.reel,
+          "Dia": r.dia || '-',
+          "Tons": Number(r.tons.toFixed(3))
+      }));
+      
+      let ws = XLSX.utils.json_to_sheet(exportData);
+      let wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Unmatched Orders");
+      XLSX.writeFile(wb, "Unmatched_Orders.xlsx");
+      toast('✓ Excel Exported Successfully');
+  } catch(e) {
+      toast('Error exporting Excel', true);
+  }
+}
+
 // ── Render ─────────────────────────────────────────────────────────────────
 function renderTable() {
   const thead = document.getElementById('tableHead');
@@ -1503,6 +1587,7 @@ function renderTable() {
   const actionBlock = document.getElementById('actionBlock');
   const btnBack = document.getElementById('btnBackToMatches');
   const btnEdit = document.getElementById('btnEditData');
+  const btnExportCSV = document.getElementById('btnExportCSV');
 
   if (!allRows.length && viewMode !== 'data') {
     table.style.display = 'none';
@@ -1517,24 +1602,33 @@ function renderTable() {
   empty.style.display = 'none';
   table.style.display = 'table';
   
+  // Dynamic Action Block Logic
   if (viewMode === 'data') {
       statsBar.style.display = 'none';
       dataForm.style.display = 'block';
       actionBlock.style.display = 'block';
       btnBack.style.display = matchRows.length > 0 ? 'inline-flex' : 'none';
       btnEdit.style.display = 'inline-flex';
+      btnExportCSV.style.display = 'none';
       
       btnEdit.innerHTML = isEditingData ? '💾 Save' : '✏️ Edit';
       btnEdit.style.background = isEditingData ? 'var(--accent)' : 'transparent';
       btnEdit.style.color = isEditingData ? '#fff' : 'var(--sub)';
       
-      document.getElementById('suggestionBoard').style.display = 'none'; // Hide suggestions in manage data
+      document.getElementById('suggestionBoard').style.display = 'none';
   } else {
       statsBar.style.display = 'flex';
       dataForm.style.display = 'none';
-      actionBlock.style.display = 'none';
-      btnEdit.style.display = 'none';
       isEditingData = false;
+      
+      if (currentFilter === 'nomatch' && viewRows.length > 0) {
+          actionBlock.style.display = 'block';
+          btnBack.style.display = 'none';
+          btnEdit.style.display = 'none';
+          btnExportCSV.style.display = 'inline-flex';
+      } else {
+          actionBlock.style.display = 'none';
+      }
   }
   
   if (viewMode !== 'data') {
@@ -1721,7 +1815,7 @@ function exportPDF() {
 function clearAll() {
   if (!confirm("Are you sure you want to clear all data? This cannot be undone.")) return;
   
-  allRows = matchRows = viewRows = [];
+  allRows = matchRows = viewRows = loadedFiles = [];
   viewMode = 'match';
   isEditingData = false;
   document.getElementById('fileLoadedBlock').style.display = 'none';
@@ -1741,7 +1835,7 @@ function clearAll() {
   toast('Cleared');
 }
 
-// ── Modal ──────────────────────────────────────────────────────────────────
+// ── Deckle Rules Modal ─────────────────────────────────────────────────────
 function openModal() {
   renderRuleList();
   document.getElementById('modalOverlay').classList.add('show');
@@ -1796,6 +1890,43 @@ function deleteRule(i) {
   refreshSelect();
   renderRuleList();
   toast(`Deleted "${name}"`);
+}
+
+// ── Uploaded Files Modal ───────────────────────────────────────────────────
+function openFileModal() {
+    let html = loadedFiles.map(f => {
+        let safeF = f.replace(/'/g, "\\'");
+        return `<div class="rule-item">
+          <div class="rule-name">${f}</div>
+          <div class="rule-actions">
+            <button class="btn-sm danger" onclick="removeFile('${safeF}')">✕ Remove</button>
+          </div>
+        </div>`;
+    }).join('');
+    
+    document.getElementById('fileList').innerHTML = html || '<div style="color:var(--sub);font-size:13px;padding:8px 0;">No files loaded.</div>';
+    document.getElementById('fileModalOverlay').classList.add('show');
+}
+function closeFileModal() { document.getElementById('fileModalOverlay').classList.remove('show'); }
+function handleFileOverlayClick(e) { if (e.target === document.getElementById('fileModalOverlay')) closeFileModal(); }
+
+function removeFile(fname) {
+    loadedFiles = loadedFiles.filter(f => f !== fname);
+    allRows = allRows.filter(r => r.fileName !== fname);
+    
+    if (loadedFiles.length === 0) {
+        closeFileModal();
+        clearAll();
+        return;
+    }
+    
+    updateFileBadge();
+    toast(`Removed ${fname}`);
+    
+    if (viewMode === 'data') showDataPage();
+    else runMatch();
+    
+    openFileModal(); // Refresh the list
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
