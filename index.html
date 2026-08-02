@@ -1,695 +1,1949 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Deckle Match - Portal vs Tally Reconciliation</title>
-  <style>
-    :root {
-      --bg-main: #f8fafc;
-      --bg-card: #ffffff;
-      --text-main: #0f172a;
-      --text-muted: #64748b;
-      --border-color: #e2e8f0;
-      --accent-black: #0f172a;
-      --hover-gray: #f1f5f9;
-      --success-bg: #f0fdf4;
-      --success-text: #166534;
-      --warning-bg: #fffbeb;
-      --warning-text: #92400e;
-      --danger-bg: #fef2f2;
-      --danger-text: #991b1b;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Deckle Match</title>
+<style>
+  /* ── Tokens ── */
+  :root {
+    --bg:        #0d0f18;
+    --surface:   #13161f;
+    --card:      #1c2030;
+    --card2:     #222843;
+    --border:    #2a2f45;
+    --accent:    #4f8ef7;
+    --accent-d:  #3a7ae0;
+    --green:     #3ecf8e;
+    --red:       #e05c6a;
+    --amber:     #f5a623;
+    --text:      #e8eaf0;
+    --sub:       #7a80a0;
+    --mono:      "Courier New", Courier, monospace;
+    --sans:      -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --radius:    14px;
+    --radius-sm: 8px;
+  }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-    body {
-      background-color: var(--bg-main);
-      color: var(--text-main);
-      padding: 20px;
-      line-height: 1.5;
-    }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
 
-    /* --- TOP HEADER --- */
-    .app-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--bg-card);
-      padding: 20px 24px;
-      border-radius: 12px;
-      border: 1px solid var(--border-color);
-      margin-bottom: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: bold;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+  .logo-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--sub);
+    margin-top: 4px;
+  }
+  .btn-icon {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--sans);
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: background 0.15s;
+    min-height: 44px;
+  }
+  .btn-icon:active { background: var(--border); }
+  
+  .sidebar-toggle {
+    font-size: 18px;
+    padding: 8px 12px;
+  }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+  /* ── Main layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 64px);
+    transition: grid-template-columns 0.3s ease;
+  }
+  
+  .main.sidebar-hidden {
+    grid-template-columns: 0 1fr;
+  }
 
-    .brand-logo {
-      font-size: 28px;
-      line-height: 1;
-    }
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    grid-row: 1 / 3;
+    transition: all 0.3s ease;
+  }
+  
+  .main.sidebar-hidden .sidebar {
+    padding-left: 0;
+    padding-right: 0;
+    opacity: 0;
+    visibility: hidden;
+    border-right: none;
+  }
 
-    .brand-title h1 {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
+  .sec-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--sub);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .upload-zone:active, .upload-zone.drag { border-color: var(--accent); background: rgba(79,142,247,0.06); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-text { font-size: 13px; color: var(--sub); }
+  .upload-text b { color: var(--accent); }
+  
+  .file-loaded-block {
+    background: rgba(62,207,142,0.05);
+    border: 1px solid rgba(62,207,142,0.3);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .file-badge {
+    font-size: 12px;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    word-break: break-all;
+  }
+  
+  .info-icon {
+    background: var(--card2);
+    color: var(--accent);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 6px;
+    border: 1px solid var(--border);
+  }
+  .info-icon:active { background: var(--accent); color: #fff; }
 
-    .brand-title p {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
+  /* Deckle selector */
+  select {
+    width: 100%;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    font-size: 13px;
+    font-family: var(--sans);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a80a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
 
-    /* --- UPLOAD SECTION --- */
-    .upload-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-bottom: 24px;
-    }
+  /* Filter pills */
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    flex: 1;
+    min-width: 70px;
+    padding: 9px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-family: var(--sans);
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--sub);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pill.active-all    { background: rgba(79,142,247,0.15); border-color: var(--accent); color: var(--accent); }
+  .pill.active-match  { background: rgba(62,207,142,0.12); border-color: var(--green);  color: var(--green); }
+  .pill.active-nomatch{ background: rgba(224,92,106,0.12); border-color: var(--red);    color: var(--red); }
 
-    .upload-card {
-      background: var(--bg-card);
-      border: 2px dashed var(--border-color);
-      border-radius: 12px;
-      padding: 24px;
-      text-align: center;
-      transition: all 0.2s ease;
-    }
+  /* Buttons */
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 14px;
+    font-size: 14px;
+    font-family: var(--mono);
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: background 0.15s;
+    min-height: 50px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-primary:active { background: var(--accent-d); }
+  .btn-secondary {
+    width: 100%;
+    background: transparent;
+    color: var(--sub);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 11px;
+    font-size: 13px;
+    font-family: var(--sans);
+    cursor: pointer;
+    min-height: 44px;
+    transition: all 0.15s;
+  }
+  .btn-secondary:active { background: var(--card); color: var(--text); }
+  
+  .btn-data {
+    border-color: var(--accent); 
+    color: var(--accent);
+    font-weight: bold;
+  }
+  
+  .btn-danger-outline {
+    border-color: rgba(224,92,106,0.5); 
+    color: var(--red);
+  }
+  .btn-danger-outline:active {
+    background: rgba(224,92,106,0.1);
+  }
 
-    .upload-card:hover {
-      border-color: var(--accent-black);
-      background: var(--hover-gray);
-    }
+  /* ── Stats bar ── */
+  .stats-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .stat {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .stat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .stat-val { font-family: var(--mono); font-size: 18px; font-weight: bold; }
+  .stat-lbl { font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-divider { width: 1px; height: 28px; background: var(--border); }
+  .deckle-info {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--sub);
+    background: var(--card);
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+  .deckle-info span { color: var(--accent); }
 
-    .upload-card h3 {
-      font-size: 16px;
-      margin-bottom: 8px;
-    }
+  /* ── Table area ── */
+  .table-wrap {
+    overflow: auto;
+    padding: 16px 20px;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* ── Suggestion Board ── */
+  .suggestion-board {
+    background: rgba(245, 166, 35, 0.06);
+    border: 1px solid rgba(245, 166, 35, 0.3);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  .suggestion-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    font-weight: bold;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .suggestion-item {
+    font-size: 14px;
+    color: var(--text);
+    padding: 12px 0;
+    border-bottom: 1px dashed rgba(245, 166, 35, 0.15);
+    line-height: 1.6;
+  }
+  .suggestion-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .suggestion-item b {
+    color: var(--accent);
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 600px;
+  }
+  thead th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--sub);
+    text-transform: uppercase;
+    padding: 10px 14px;
+    text-align: left;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th:hover { color: var(--text); }
+  thead th.sorted { color: var(--accent); }
+  thead th .sort-arrow { margin-left: 4px; opacity: 0.5; }
+  thead th.sorted .sort-arrow { opacity: 1; }
 
-    .upload-card p {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-    }
+  tbody tr {
+    border-bottom: 1px solid rgba(42,47,69,0.6);
+    transition: background 0.1s;
+  }
+  tbody tr:active { background: var(--card); }
 
-    input[type="file"] {
+  /* Protect data rows from text-selection on long press */
+  .data-row {
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  td {
+    padding: 13px 14px;
+    vertical-align: middle;
+  }
+  td.customer { font-weight: 500; }
+  td.size-val { font-family: var(--mono); font-size: 15px; font-weight: bold; }
+  td.center { text-align: center; }
+
+  /* Row highlight overrides */
+  tr.row-nomatch td.size-val { color: var(--red); }
+  
+  /* Inline Edit Input */
+  .edit-input {
+    width: 100%;
+    max-width: 80px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px;
+    font-size: 14px;
+    font-family: var(--sans);
+    text-align: center;
+  }
+  .edit-input:focus {
+    outline: none;
+    border-color: var(--green);
+  }
+
+  /* ── Empty / placeholder ── */
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    padding: 40px;
+    text-align: center;
+  }
+  .empty-icon { font-size: 48px; opacity: 0.3; }
+  .empty-title { font-size: 16px; color: var(--sub); }
+  .empty-sub { font-size: 13px; color: var(--border); max-width: 260px; }
+
+  /* ── Modal / Forms ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px 24px 0 0;
+    width: 100%;
+    max-width: 560px;
+    padding: 28px 24px 40px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .modal-handle {
+    width: 40px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .modal-title {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--accent);
+    margin-bottom: 20px;
+  }
+  .rule-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .rule-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .rule-name { font-weight: 600; font-size: 14px; word-break: break-all; }
+  .rule-range { font-family: var(--mono); font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .rule-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  
+  .btn-sm {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    color: var(--sub);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    min-height: 36px;
+  }
+  .btn-sm.danger { color: var(--red); }
+  .btn-sm.danger:active { background: rgba(224,92,106,0.2); border-color: var(--red); }
+  .btn-sm:active { background: var(--border); color: var(--text); }
+
+  /* Input fields */
+  .add-form { display: flex; flex-direction: column; gap: 12px; }
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field label {
+    font-size: 11px;
+    color: var(--sub);
+    display: block;
+    margin-bottom: 4px;
+    font-family: var(--mono);
+  }
+  .field input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 15px;
+    padding: 12px;
+    min-height: 48px;
+    font-family: var(--sans);
+    transition: border-color 0.15s;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .modal-footer { display: flex; gap: 10px; margin-top: 8px; }
+  .modal-footer .btn-primary { flex: 1; }
+  .modal-footer .btn-secondary { flex: 0 0 auto; width: auto; padding: 11px 20px; }
+  
+  .data-form-grid {
+    display: grid; 
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; 
+    gap: 8px; 
+    margin-bottom: 12px;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--card2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 20px;
+    border-radius: 24px;
+    font-size: 13px;
+    z-index: 999;
+    opacity: 0;
+    transition: all 0.3s;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Responsive: phone / portrait iPad ── */
+  @media (max-width: 768px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; height: auto; }
+    .main.sidebar-hidden .sidebar {
       display: none;
     }
-
-    .file-label {
-      display: inline-block;
-      padding: 10px 18px;
-      background: var(--accent-black);
-      color: white;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-
-    .file-label:hover {
-      opacity: 0.9;
-    }
-
-    .file-status {
-      margin-top: 12px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-muted);
-    }
-
-    /* --- ACTION & EXPORT BAR --- */
-    .export-bar {
-      display: flex;
-      gap: 12px;
+    .sidebar {
+      grid-row: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      flex-direction: row;
       flex-wrap: wrap;
-      align-items: center;
-      background: var(--bg-card);
-      padding: 16px 24px;
-      border-radius: 12px;
-      border: 1px solid var(--border-color);
-      margin-bottom: 24px;
-    }
-
-    .btn {
-      padding: 10px 18px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      border: 1px solid var(--border-color);
-      background: var(--bg-card);
-      color: var(--text-main);
-      transition: all 0.2s;
-    }
-
-    .btn:hover {
-      background: var(--hover-gray);
-      border-color: var(--accent-black);
-    }
-
-    .btn-match {
-      background: var(--accent-black);
-      color: white;
-      border-color: var(--accent-black);
-    }
-
-    .btn-match:hover {
-      background: #1e293b;
-      color: white;
-    }
-
-    .btn-clear {
-      background-color: #ef4444;
-      color: white;
-      border-color: #dc2626;
-      margin-left: auto;
-    }
-
-    .btn-clear:hover {
-      background-color: #dc2626;
-      border-color: #b91c1c;
-      color: white;
-    }
-
-    /* --- SUMMARY CARDS --- */
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
       gap: 16px;
-      margin-bottom: 24px;
+      padding: 16px;
     }
-
-    .summary-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 18px;
-    }
-
-    .summary-card.matched { border-left: 4px solid #16a34a; }
-    .summary-card.missing-tally { border-left: 4px solid #d97706; }
-    .summary-card.missing-portal { border-left: 4px solid #dc2626; }
-
-    .summary-label {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      font-weight: 600;
-    }
-
-    .summary-value {
-      font-size: 24px;
-      font-weight: 700;
-    }
-
-    /* --- DATA TABLE SECTION --- */
-    .table-container {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      overflow: hidden;
-      margin-bottom: 30px;
-    }
-
-    .table-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--border-color);
-      background: #f8fafc;
-    }
-
-    .table-header h3 {
-      font-size: 15px;
-      font-weight: 600;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-    }
-
-    th {
-      padding: 12px 24px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border-color);
-      background: #fdfdfe;
-    }
-
-    td {
-      padding: 14px 24px;
-      font-size: 13px;
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    tr:hover td {
-      background-color: var(--hover-gray);
-    }
-
-    /* --- STATUS BADGES --- */
-    .badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
-    .badge-success {
-      background: var(--success-bg);
-      color: var(--success-text);
-    }
-
-    .badge-warning {
-      background: var(--warning-bg);
-      color: var(--warning-text);
-    }
-
-    .badge-danger {
-      background: var(--danger-bg);
-      color: var(--danger-text);
-    }
-
-    .empty-state {
-      padding: 40px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 14px;
-    }
-
-    @media (max-width: 768px) {
-      .upload-grid, .summary-grid {
-        grid-template-columns: 1fr;
-      }
-      .btn-clear {
-        margin-left: 0;
-        width: 100%;
-      }
-    }
-  </style>
+    .sidebar > * { flex: 1 1 200px; }
+    .stats-bar { padding: 10px 16px; }
+    .table-wrap { padding: 12px; }
+    .logo { font-size: 18px; }
+    .logo-sub { display: none; }
+    .data-form-grid { grid-template-columns: 1fr 1fr; }
+    .data-form-grid > *:first-child { grid-column: 1 / -1; }
+  }
+</style>
 </head>
 <body>
 
-  <!-- TOP HEADER -->
-  <header class="app-header">
-    <div class="brand">
-      <div class="brand-logo">⬡</div>
-      <div class="brand-title">
-        <h1>Deckle Match</h1>
-        <p>Offline Reconciliation Engine for iPad, Mobile & Desktop</p>
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <button class="btn-icon sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div>
+      <div class="logo">⬡ DECKLE MATCH</div>
+      <div class="logo-sub">Order Size Matcher</div>
+    </div>
+  </div>
+  <button class="btn-icon" onclick="openModal()">⚙ Manage Deckles</button>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div>
+      <div class="sec-label">1 · Upload Excel File</div>
+      
+      <!-- Upload Zone (Hidden after first upload) -->
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" onchange="handleFile(this, false)">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">Tap to <b>Browse</b><br>Excel or CSV file</div>
+      </div>
+      
+      <!-- Loaded State & Append More Data Button -->
+      <div id="fileLoadedBlock" style="display:none;" class="file-loaded-block">
+        <div class="file-badge show">
+          <span>✓</span>
+          <span id="fileName" style="display:flex; align-items:center;">Data Loaded</span>
+        </div>
+        <button class="btn-secondary" onclick="document.getElementById('appendInput').click()" style="font-size:12px; min-height:36px; padding:8px; border-color:var(--accent); color:var(--accent);">
+          ➕ Add Another File
+        </button>
+        <input type="file" id="appendInput" accept=".xlsx,.xls,.xlsm,.csv" onchange="handleFile(this, true)" style="display:none;">
+      </div>
+      
+    </div>
+
+    <div>
+      <div class="sec-label">2 · Select Deckle Range</div>
+      <select id="deckleSelect"></select>
+    </div>
+
+    <div>
+      <div class="sec-label">3 · Show Orders</div>
+      <div class="pills">
+        <div class="pill active-all" data-filter="all" onclick="setFilter('all')">All</div>
+        <div class="pill" data-filter="match" onclick="setFilter('match')">✔ Matched</div>
+        <div class="pill" data-filter="nomatch" onclick="setFilter('nomatch')">✕ No Match</div>
       </div>
     </div>
-  </header>
 
-  <!-- FILE UPLOAD CARDS -->
-  <section class="upload-grid">
-    <!-- Portal CSV -->
-    <div class="upload-card">
-      <h3>1. Portal CSV Upload</h3>
-      <p>Upload your Government / Web Portal GST export file</p>
-      <label class="file-label" for="portalFile">Select Portal CSV</label>
-      <input type="file" id="portalFile" accept=".csv">
-      <div class="file-status" id="portalStatus">No file selected</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button class="btn-secondary btn-data" onclick="showDataPage()">📋 MANAGE DATA</button>
+      <button class="btn-primary" onclick="runMatch()">🔍 RUN MATCH</button>
+      <button class="btn-secondary" onclick="exportPDF()">📄 EXPORT PDF</button>
+      <button class="btn-secondary btn-danger-outline" onclick="clearMatchedData()">🗑 CLEAR MATCHED</button>
+      <button class="btn-secondary" onclick="clearAll()">✕ Clear All</button>
     </div>
 
-    <!-- Tally CSV -->
-    <div class="upload-card">
-      <h3>2. Tally CSV Upload</h3>
-      <p>Upload your Tally Prime / ERP 9 export file</p>
-      <label class="file-label" for="tallyFile">Select Tally CSV</label>
-      <input type="file" id="tallyFile" accept=".csv">
-      <div class="file-status" id="tallyStatus">No file selected</div>
-    </div>
-  </section>
+  </aside>
 
-  <!-- ACTION & EXPORT CONTROLS -->
-  <section class="export-bar">
-    <button class="btn btn-match" onclick="matchData()">⚡ Run Match Engine</button>
-    <button class="btn" onclick="exportCSV('matched')">Export Matched CSV</button>
-    <button class="btn" onclick="exportCSV('missingTally')">Export Missing in Tally</button>
-    <button class="btn" onclick="exportCSV('missingPortal')">Export Missing in Portal</button>
-    <button class="btn" onclick="exportCSV('all')">Export All (3 Files)</button>
-    <button class="btn btn-clear" onclick="clearAllData()">🗑️ Clear Saved Data</button>
-  </section>
+  <!-- Stats bar -->
+  <div class="stats-bar" id="statsBar" style="display:none;">
+    <div class="stat">
+      <div class="stat-dot" style="background:var(--accent)"></div>
+      <div>
+        <div class="stat-val" id="statOrderTons" style="color:var(--accent)">0.000</div>
+        <div class="stat-lbl">Total Order Tons</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-dot" style="background:var(--amber)"></div>
+      <div>
+        <div class="stat-val" id="statBalanceTons" style="color:var(--amber)">0.000</div>
+        <div class="stat-lbl">Balance Tons</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-dot" style="background:var(--green)"></div>
+      <div>
+        <div class="stat-val" id="statMatchedTons" style="color:var(--green)">0.000</div>
+        <div class="stat-lbl">Matched Tons</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-dot" style="background:var(--sub)"></div>
+      <div>
+        <div class="stat-val" id="statTotalSets">0</div>
+        <div class="stat-lbl">Total Sets</div>
+      </div>
+    </div>
+    <div class="deckle-info" id="deckleInfo"></div>
+  </div>
 
-  <!-- SUMMARY METRICS -->
-  <section class="summary-grid">
-    <div class="summary-card">
-      <div class="summary-label">Total Processed</div>
-      <div class="summary-value" id="totalCount">0</div>
+  <!-- Table -->
+  <div class="table-wrap" id="tableWrap">
+    <div class="empty" id="emptyState">
+      <div class="empty-icon">📂</div>
+      <div class="empty-title">No data loaded</div>
+      <div class="empty-sub">Upload your Excel file or click 'Manage Data' to add manual orders.</div>
     </div>
-    <div class="summary-card matched">
-      <div class="summary-label">Exact Matches</div>
-      <div class="summary-value" id="matchCount">0</div>
-    </div>
-    <div class="summary-card missing-tally">
-      <div class="summary-label">Missing in Tally</div>
-      <div class="summary-value" id="missingTallyCount">0</div>
-    </div>
-    <div class="summary-card missing-portal">
-      <div class="summary-label">Missing in Portal</div>
-      <div class="summary-value" id="missingPortalCount">0</div>
-    </div>
-  </section>
-
-  <!-- DATA TABLES -->
-  <section class="table-container">
-    <div class="table-header">
-      <h3>Reconciliation Results & Status</h3>
-    </div>
-    <div style="overflow-x: auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>Invoice No</th>
-            <th>GSTIN / Party ID</th>
-            <th>Portal Tax (₹)</th>
-            <th>Tally Tax (₹)</th>
-            <th>Match Status</th>
-          </tr>
-        </thead>
-        <tbody id="resultsTableBody">
-          <tr>
-            <td colspan="5" class="empty-state">
-              No data processed yet. Upload Portal and Tally CSVs and click "Run Match Engine".
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- INLINE JAVASCRIPT ENGINE -->
-  <script>
-    let portalData = [];
-    let tallyData = [];
     
-    let matchedList = [];
-    let missingInTally = [];
-    let missingInPortal = [];
+    <!-- Action buttons block for Sub-pages -->
+    <div id="actionBlock" style="display:none; margin-bottom: 16px;">
+      <button id="btnBackToMatches" class="btn-secondary" onclick="runMatch()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold;">
+        ⬅ Back to Matches
+      </button>
+      <button id="btnEditData" class="btn-secondary" onclick="toggleEditMode()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; margin-left: 8px;">
+        ✏️ Edit
+      </button>
+      <button id="btnExportCSV" class="btn-secondary" onclick="exportUnmatchedExcel()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; margin-left: 8px; border-color: var(--green); color: var(--green);">
+        ⬇ Export Excel
+      </button>
+    </div>
+    
+    <!-- Manual Data Entry Form -->
+    <div id="dataEntryForm" style="display:none; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px;">
+        <div style="font-family:var(--mono); font-size:12px; color:var(--accent); margin-bottom:12px; font-weight:bold;">＋ ADD NEW ORDER MANUALLY</div>
+        <div class="data-form-grid field">
+            <input type="text" id="addCust" placeholder="Customer Name">
+            <input type="number" id="addGsm" placeholder="GSM">
+            <input type="number" id="addBf" placeholder="BF">
+            <input type="text" id="addSize" placeholder="Size (e.g. 100 or 39&quot;)">
+            <input type="number" id="addReel" placeholder="Reels">
+            <input type="text" id="addDia" placeholder="Dia">
+        </div>
+        <button class="btn-primary" onclick="addManualOrder()" style="min-height: 40px; padding: 10px; font-size: 12px;">Add Order</button>
+    </div>
+    
+    <!-- Suggestion Board -->
+    <div id="suggestionBoard" class="suggestion-board" style="display:none;">
+      <div class="suggestion-title">💡 PRODUCTION SUGGESTIONS (UNMATCHED REELS)</div>
+      <div id="suggestionList"></div>
+    </div>
 
-    // --- 1. FULL, ORIGINAL GST CSV PARSER WITH TAX TOTALS & IGST/CGST/SGST SUPPORT ---
-    function parseCSV(text) {
-      const lines = text.trim().split(/\r?\n/);
-      if (lines.length < 2) return [];
+    <table id="resultsTable" style="display:none;">
+      <thead id="tableHead">
+        <!-- Will be dynamically managed via JS -->
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
 
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
-      const rows = [];
+</div>
 
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-        const rowObject = {};
-        
-        headers.forEach((header, index) => {
-          rowObject[header] = values[index] || '';
-        });
+<!-- Manage Deckles Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚙ MANAGE DECKLE RANGES</div>
 
-        const invoiceNo = rowObject['invoiceno'] || rowObject['invoice_no'] || rowObject['invoice no'] || rowObject['inv_no'] || rowObject['inv no'] || values[0];
-        const gstin = rowObject['gstin'] || rowObject['gst'] || rowObject['party_gstin'] || rowObject['party gstin'] || values[1] || 'NA';
-        
-        // Exact Tax amount logic: supports total tax column OR sums IGST + CGST + SGST
-        let taxVal = parseFloat(rowObject['tax'] || rowObject['tax_amount'] || rowObject['tax amount'] || 0);
-        if (taxVal === 0) {
-          const igst = parseFloat(rowObject['igst'] || 0);
-          const cgst = parseFloat(rowObject['cgst'] || 0);
-          const sgst = parseFloat(rowObject['sgst'] || 0);
-          taxVal = igst + cgst + sgst;
-        }
-        if (taxVal === 0 && values[2]) {
-          taxVal = parseFloat(values[2]) || 0;
-        }
+    <div class="rule-list" id="ruleList"></div>
 
-        if (invoiceNo) {
-          rows.push({
-            invoiceNo: invoiceNo.trim().toUpperCase(),
-            gstin: gstin.trim().toUpperCase(),
-            tax: parseFloat(taxVal.toFixed(2)) || 0
-          });
-        }
-      }
-      return rows;
+    <div style="font-family:var(--mono); font-size:10px; color:var(--sub); letter-spacing:1px; margin-bottom:10px;">ADD NEW DECKLE</div>
+    <div class="add-form">
+      <div class="field">
+        <label>Deckle Name</label>
+        <input type="text" id="newName" placeholder="e.g. Deckle 422-435">
+      </div>
+      <div class="input-row">
+        <div class="field">
+          <label>Min Size</label>
+          <input type="number" id="newMin" placeholder="422" step="0.1">
+        </div>
+        <div class="field">
+          <label>Max Size</label>
+          <input type="number" id="newMax" placeholder="435" step="0.1">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="addRule()">＋ Add Deckle</button>
+    </div>
+  </div>
+</div>
+
+<!-- Uploaded Files Modal -->
+<div class="modal-overlay" id="fileModalOverlay" onclick="handleFileOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📂 LOADED FILES</div>
+    <div class="rule-list" id="fileList"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="closeFileModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Libraries for Excel & PDF Export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+// ── Universal Size Parser (CM / Inches) ────────────────────────────────────
+function parseSizeInput(valStr) {
+    if (!valStr) return { size: 0, displaySize: '0' };
+    let str = String(valStr).toLowerCase().trim();
+    
+    // Broad check for ANY quote-like character, prime, or 'in' abbreviation
+    let isInch = str.includes('"') || 
+                 str.includes('”') || 
+                 str.includes('“') || 
+                 str.includes('″') || 
+                 str.includes("'") || 
+                 str.includes('’') || 
+                 str.includes('‘') || 
+                 str.includes('in');
+                 
+    let num = parseFloat(str.replace(/[^\d.-]/g, '')) || 0;
+    
+    if (isInch && num > 0) {
+        return { size: num * 2.54, displaySize: num + '"' };
     }
+    return { size: num, displaySize: num > 0 ? num.toFixed(2) : '0' };
+}
 
-    // --- 2. FILE UPLOAD LISTENERS ---
-    document.getElementById('portalFile').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (file) {
-        document.getElementById('portalStatus').innerText = `Loaded: ${file.name}`;
-        const reader = new FileReader();
-        reader.onload = function(event) {
-          portalData = parseCSV(event.target.result);
-        };
-        reader.readAsText(file);
-      }
-    });
+// ── Sidebar Toggle Logic ───────────────────────────────────────────────────
+function toggleSidebar() {
+  document.querySelector('.main').classList.toggle('sidebar-hidden');
+}
 
-    document.getElementById('tallyFile').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (file) {
-        document.getElementById('tallyStatus').innerText = `Loaded: ${file.name}`;
-        const reader = new FileReader();
-        reader.onload = function(event) {
-          tallyData = parseCSV(event.target.result);
-        };
-        reader.readAsText(file);
-      }
-    });
+// ── State ──────────────────────────────────────────────────────────────────
+let rules = JSON.parse(localStorage.getItem('deckleRules') || 'null') || [
+  { name: "Deckle 422-435", min: 422, max: 435 }
+];
+let allRows   = [];   
+let matchRows = [];   
+let viewRows  = [];   
+let loadedFiles = []; // Tracks uploaded file names
+let currentFilter = 'all';
+let sortKey   = null;
+let sortAsc   = true;
+let viewMode  = 'match'; // Can be 'match' or 'data'
+let isEditingData = false;
 
-    // --- 3. RECONCILIATION LOGIC (EXACT ORIGINAL LOGIC WITH ROUNDING ALLOWANCE) ---
-    function matchData() {
-      if (portalData.length === 0 && tallyData.length === 0) {
-        alert('Please upload valid CSV files for both Portal and Tally before running the match.');
+// ── Persist ────────────────────────────────────────────────────────────────
+function saveRules() {
+  localStorage.setItem('deckleRules', JSON.stringify(rules));
+}
+
+// ── Deckle select ──────────────────────────────────────────────────────────
+function refreshSelect() {
+  const sel = document.getElementById('deckleSelect');
+  const cur = sel.value;
+  sel.innerHTML = rules.map((r, i) =>
+    `<option value="${i}">${r.name}  (${r.min}–${r.max})</option>`
+  ).join('');
+  const idx = rules.findIndex((r, i) => `${i}` === cur);
+  if (idx >= 0) sel.value = idx;
+}
+
+// ── Update File Badge UI ───────────────────────────────────────────────────
+function updateFileBadge() {
+    if (loadedFiles.length === 0) {
+        clearAll();
         return;
+    }
+    let fText = loadedFiles.length > 1 ? "Multiple Files Loaded" : loadedFiles[0];
+    document.getElementById('fileName').innerHTML = `${fText} <span class="info-icon" onclick="openFileModal()">i</span>`;
+}
+
+// ── File upload ────────────────────────────────────────────────────────────
+function handleFile(input, isAppend) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let rows = [];
+
+      if (file.name.endsWith('.csv')) {
+        const text = new TextDecoder().decode(e.target.result);
+        const lines = text.trim().split('\n');
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        for (let i = 1; i < lines.length; i++) {
+          const vals = lines[i].split(',');
+          const obj = {};
+          headers.forEach((h, j) => obj[h] = (vals[j] || '').trim());
+          rows.push(obj);
+        }
+      } else {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
       }
 
-      matchedList = [];
-      missingInTally = [];
-      missingInPortal = [];
+      // Track file
+      let currentFileName = file.name;
+      if (!isAppend) {
+          loadedFiles = [currentFileName];
+      } else {
+          if (!loadedFiles.includes(currentFileName)) loadedFiles.push(currentFileName);
+      }
 
-      const tallyMap = new Map();
-      tallyData.forEach(item => {
-        tallyMap.set(item.invoiceNo, item);
-      });
+      // ── ROBUST COLUMN MATCHING ──
+      let newRows = rows.map((r, index) => {
+        let rowStrKeys = Object.keys(r);
+        
+        let getVal = (keywords) => {
+          let key = rowStrKeys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+          return key ? r[key] : null;
+        };
 
-      portalData.forEach(portalItem => {
-        if (tallyMap.has(portalItem.invoiceNo)) {
-          const tallyItem = tallyMap.get(portalItem.invoiceNo);
-          // Original Rounding/Tolerance check (allows up to ₹1.00 rounding difference)
-          if (Math.abs(portalItem.tax - tallyItem.tax) <= 1.0) {
-            matchedList.push({
-              invoiceNo: portalItem.invoiceNo,
-              gstin: portalItem.gstin,
-              portalTax: portalItem.tax,
-              tallyTax: tallyItem.tax,
-              status: 'Matched'
-            });
-          } else {
-            // Mismatch in tax values is flagged
-            matchedList.push({
-              invoiceNo: portalItem.invoiceNo,
-              gstin: portalItem.gstin,
-              portalTax: portalItem.tax,
-              tallyTax: tallyItem.tax,
-              status: 'Tax Mismatch'
-            });
-          }
-          tallyMap.delete(portalItem.invoiceNo);
-        } else {
-          missingInTally.push({
-            invoiceNo: portalItem.invoiceNo,
-            gstin: portalItem.gstin,
-            portalTax: portalItem.tax,
-            tallyTax: 0,
-            status: 'Missing in Tally'
-          });
+        let parseNumber = (val) => {
+          if (typeof val === 'number') return val;
+          if (!val) return 0;
+          return parseFloat(String(val).replace(/[^\d.-]/g, '')) || 0;
+        };
+
+        let parseField = (val, isGsm) => {
+           if (val === null || val === undefined) return 0;
+           let str = String(val);
+           if (str.includes('/')) {
+               let parts = str.split('/');
+               return parseNumber(isGsm ? parts[0] : parts[1]);
+           }
+           return parseNumber(str);
+        };
+
+        let customer = getVal(['customer', 'name', 'client']) || 'Unknown';
+        
+        let gsmValRaw = getVal(['gsm/bf', 'gsmbf', 'gsm']);
+        let bfValRaw = getVal(['gsm/bf', 'gsmbf', 'bf', 'b.f']);
+        
+        if (!bfValRaw && gsmValRaw && String(gsmValRaw).includes('/')) {
+            bfValRaw = gsmValRaw;
         }
-      });
-
-      tallyMap.forEach(tallyItem => {
-        missingInPortal.push({
-          invoiceNo: tallyItem.invoiceNo,
-          gstin: tallyItem.gstin,
-          portalTax: 0,
-          tallyTax: tallyItem.tax,
-          status: 'Missing in Portal'
-        });
-      });
-
-      renderTables();
-      updateSummary();
+        
+        let gsm = parseField(gsmValRaw, true);
+        let bf = parseField(bfValRaw, false);
+        
+        let sizeRaw = String(getVal(['size', 'deckle', 'mm', 'cm', 'inch']) || '0');
+        let parsed = parseSizeInput(sizeRaw);
+        
+        let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
+        let dia = getVal(['dia', 'shade']) || '-';
+        
+        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, reel, dia: String(dia), fileName: currentFileName, _selected: true };
+      }).filter(row => row.size > 0 && row.reel > 0);
       
-      // Save data permanently so it never vanishes
-      saveToLocalMemory();
-    }
-
-    // --- 4. RENDER UI TABLE ---
-    function renderTables() {
-      const tbody = document.getElementById('resultsTableBody');
-      tbody.innerHTML = '';
-
-      const allResults = [...matchedList, ...missingInTally, ...missingInPortal];
-
-      if (allResults.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No data available. Upload CSVs and run match.</td></tr>`;
-        return;
+      if (isAppend) {
+          let maxId = allRows.length > 0 ? Math.max(...allRows.map(r => r.id)) : 0;
+          newRows.forEach(r => r.id = ++maxId);
+          allRows = [...allRows, ...newRows];
+          toast(`✓ Appended ${newRows.length} more orders`);
+      } else {
+          newRows.forEach((r, i) => r.id = i);
+          allRows = newRows;
+          toast(`✓ Loaded ${allRows.length} valid orders`);
       }
-
-      allResults.forEach(row => {
-        let badgeClass = 'badge-success';
-        if (row.status === 'Missing in Tally' || row.status === 'Tax Mismatch') badgeClass = 'badge-warning';
-        if (row.status === 'Missing in Portal') badgeClass = 'badge-danger';
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><strong>${row.invoiceNo}</strong></td>
-          <td>${row.gstin}</td>
-          <td>₹${row.portalTax.toFixed(2)}</td>
-          <td>₹${row.tallyTax.toFixed(2)}</td>
-          <td><span class="badge ${badgeClass}">${row.status}</span></td>
-        `;
-        tbody.appendChild(tr);
-      });
+      
+      document.getElementById('uploadZone').style.display = 'none';
+      document.getElementById('fileLoadedBlock').style.display = 'flex';
+      updateFileBadge();
+      
+      input.value = ''; // Reset so the same file can be selected again if needed
+      showDataPage();
+      
+    } catch(err) {
+      toast('Error reading file: ' + err.message, true);
     }
+  };
+  reader.readAsArrayBuffer(file);
+}
 
-    // --- 5. UPDATE SUMMARY CARDS ---
-    function updateSummary() {
-      const total = matchedList.length + missingInTally.length + missingInPortal.length;
-      document.getElementById('totalCount').innerText = total;
-      document.getElementById('matchCount').innerText = matchedList.length;
-      document.getElementById('missingTallyCount').innerText = missingInTally.length;
-      document.getElementById('missingPortalCount').innerText = missingInPortal.length;
+// ── Selection Controls ─────────────────────────────────────────────────────
+function toggleSelection(id, isChecked) {
+    let row = allRows.find(r => r.id === id);
+    if (row) row._selected = isChecked;
+    
+    let vRow = viewRows.find(r => r.id === id);
+    if (vRow) vRow._selected = isChecked;
+    
+    renderTable(); // Refresh table strictly without re-sorting
+}
+
+function toggleAllSelection(isChecked) {
+    allRows.forEach(r => r._selected = isChecked);
+    viewRows.forEach(r => r._selected = isChecked);
+    renderTable();
+}
+
+// ── Inline Edit Data Logic ─────────────────────────────────────────────────
+function toggleEditMode() {
+    isEditingData = !isEditingData;
+    if (!isEditingData) {
+        showDataPage();
+    } else {
+        renderTable(); 
     }
+}
 
-    // --- 6. EXPORT TO CSV FUNCTIONS ---
-    function generateCSVString(dataArray) {
-      if (dataArray.length === 0) return '';
-      const header = "Invoice No,GSTIN,Portal Tax,Tally Tax,Status\n";
-      const rows = dataArray.map(item => 
-        `"${item.invoiceNo}","${item.gstin}",${item.portalTax},${item.tallyTax},"${item.status}"`
-      ).join("\n");
-      return header + rows;
+function updateData(id, field, value) {
+    let row = allRows.find(r => r.id === id);
+    let vRow = viewRows.find(r => r.id === id);
+    
+    if (row) {
+        if (field === 'customer' || field === 'dia') {
+            row[field] = value;
+            if(vRow) vRow[field] = value;
+        } else if (field === 'size') {
+            let parsed = parseSizeInput(value);
+            row.size = parsed.size;
+            row.displaySize = parsed.displaySize;
+            if(vRow) { vRow.size = row.size; vRow.displaySize = row.displaySize; }
+        } else {
+            row[field] = parseFloat(value) || 0;
+            if(vRow) vRow[field] = parseFloat(value) || 0;
+        }
+        
+        // Recalculate tons silently on the specific row
+        row.tons = (row.size / 2.54 * 12.2 * row.reel) / 1000;
+        if(vRow) vRow.tons = row.tons;
     }
+    
+    // Update top global stats instantly
+    let activeRows = allRows.filter(r => r._selected !== false);
+    let sumAllOrderTons = activeRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
+    document.getElementById('statOrderTons').textContent = sumAllOrderTons.toFixed(3);
+    
+    // Visually update the tons in the table without breaking input focus
+    let tonsCell = document.getElementById(`tons-${id}`);
+    if (tonsCell && row) {
+        tonsCell.textContent = row.tons.toFixed(3);
+    }
+}
 
-    function downloadCSVFile(csvString, fileName) {
-      if (!csvString) {
-        alert("No data available to export for this selection.");
-        return;
+// ── Long-Press Delete Logic ────────────────────────────────────────────────
+let pressTimer;
+let isPressing = false;
+
+function startPress(id) {
+  isPressing = true;
+  pressTimer = setTimeout(() => {
+    if(isPressing) {
+      if(confirm('Delete this order?')) {
+        deleteOrder(id);
       }
-      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     }
+  }, 800);
+}
 
-    function exportCSV(type) {
-      if (type === 'matched') {
-        downloadCSVFile(generateCSVString(matchedList), 'Deckle_Matched_Invoices.csv');
-      } else if (type === 'missingTally') {
-        downloadCSVFile(generateCSVString(missingInTally), 'Deckle_Missing_In_Tally.csv');
-      } else if (type === 'missingPortal') {
-        downloadCSVFile(generateCSVString(missingInPortal), 'Deckle_Missing_In_Portal.csv');
-      } else if (type === 'all') {
-        if (matchedList.length > 0) downloadCSVFile(generateCSVString(matchedList), 'Deckle_Matched_Invoices.csv');
-        if (missingInTally.length > 0) downloadCSVFile(generateCSVString(missingInTally), 'Deckle_Missing_In_Tally.csv');
-        if (missingInPortal.length > 0) downloadCSVFile(generateCSVString(missingInPortal), 'Deckle_Missing_In_Portal.csv');
-      }
-    }
+function endPress() {
+  isPressing = false;
+  clearTimeout(pressTimer);
+}
 
-    // =========================================================================
-    // --- 7. PERMANENT DATA STORAGE (NEVER CLEARS UNTIL YOU CLICK THE BUTTON) ---
-    // =========================================================================
+// ── Add/Delete Manual Order ────────────────────────────────────────────────
+function addManualOrder() {
+  let cust = document.getElementById('addCust').value.trim() || 'Manual';
+  let gsm = parseFloat(document.getElementById('addGsm').value) || 0;
+  let bf = parseFloat(document.getElementById('addBf').value) || 0;
+  let sizeRaw = document.getElementById('addSize').value;
+  let reel = parseFloat(document.getElementById('addReel').value) || 0;
+  let dia = document.getElementById('addDia').value.trim() || '-';
 
-    function saveToLocalMemory() {
-      const appData = {
-        tallyData: tallyData,
-        portalData: portalData,
-        matchedList: matchedList,
-        missingInTally: missingInTally,
-        missingInPortal: missingInPortal
-      };
-      try {
-        localStorage.setItem('deckleSavedMatchData', JSON.stringify(appData));
-      } catch (e) {
-        console.error("Storage error", e);
-      }
-    }
+  if(!gsm || !bf || !sizeRaw.trim() || !reel) {
+    toast('Please fill GSM, BF, Size, and Reels', true);
+    return;
+  }
 
-    function loadFromLocalMemory() {
-      const savedJSON = localStorage.getItem('deckleSavedMatchData');
-      if (savedJSON) {
-        try {
-          const appData = JSON.parse(savedJSON);
-          tallyData = appData.tallyData || [];
-          portalData = appData.portalData || [];
-          matchedList = appData.matchedList || [];
-          missingInTally = appData.missingInTally || [];
-          missingInPortal = appData.missingInPortal || [];
+  let parsed = parseSizeInput(sizeRaw);
+  
+  if (!loadedFiles.includes('Manual Entry')) {
+      loadedFiles.push('Manual Entry');
+      document.getElementById('uploadZone').style.display = 'none';
+      document.getElementById('fileLoadedBlock').style.display = 'flex';
+      updateFileBadge();
+  }
+
+  let newId = allRows.length > 0 ? Math.max(...allRows.map(r => r.id)) + 1 : 0;
+  
+  allRows.push({
+    id: newId,
+    customer: cust,
+    gsm: gsm,
+    bf: bf,
+    size: parsed.size,
+    displaySize: parsed.displaySize,
+    reel: reel,
+    dia: String(dia),
+    fileName: 'Manual Entry',
+    _selected: true
+  });
+
+  document.getElementById('addCust').value = '';
+  document.getElementById('addGsm').value = '';
+  document.getElementById('addBf').value = '';
+  document.getElementById('addSize').value = '';
+  document.getElementById('addReel').value = '';
+  document.getElementById('addDia').value = '';
+
+  toast('✓ Order Added');
+  showDataPage();
+}
+
+function deleteOrder(id) {
+  allRows = allRows.filter(r => r.id !== id);
+  toast('Order Removed');
+  showDataPage();
+}
+
+// ── Show Data View ─────────────────────────────────────────────────────────
+function showDataPage() {
+  viewMode = 'data';
+  
+  document.querySelectorAll('.pills .pill').forEach(p => p.className = 'pill');
+  
+  viewRows = [...allRows].map(r => ({
+      ...r,
+      tons: (r.size / 2.54 * 12.2 * r.reel) / 1000
+  }));
+  
+  viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
+  renderTable();
+  
+  if(window.innerWidth > 768) {
+    document.querySelector('.main').classList.remove('sidebar-hidden');
+  }
+}
+
+// ── Run match (Inventory Deduction + Strict Dia Matching + Up to 7 Reels) ─
+function runMatch() {
+  let activeRows = allRows.filter(r => r._selected !== false);
+  
+  if (!activeRows.length) { toast('Please add/select data first', true); return; }
+  const idx  = parseInt(document.getElementById('deckleSelect').value);
+  const rule = rules[idx];
+  if (!rule) { toast('Please select a deckle range', true); return; }
+
+  viewMode = 'match';
+  matchRows = [];
+  
+  let groups = {};
+  activeRows.forEach(row => {
+    let key = `${row.gsm}`; 
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(JSON.parse(JSON.stringify(row))); 
+  });
+
+  Object.keys(groups).forEach(key => {
+    let items = groups[key];
+
+    let keepMatching = true;
+    while(keepMatching) {
+      let available = items.filter(i => i.reel > 0);
+      if (available.length === 0) break;
+
+      let bestCombo = null;
+      let bestScore = -1;
+
+      function search(startIndex, currentCombo, currentSize, minBf, maxBf, usedCounts) {
+        if (currentSize >= rule.min && currentSize <= rule.max) {
           
-          if (matchedList.length > 0 || missingInTally.length > 0 || missingInPortal.length > 0) {
-            renderTables();
-            updateSummary();
-            document.getElementById('portalStatus').innerText = portalData.length > 0 ? `Saved from previous session (${portalData.length} records)` : 'No file selected';
-            document.getElementById('tallyStatus').innerText = tallyData.length > 0 ? `Saved from previous session (${tallyData.length} records)` : 'No file selected';
+          let itemCounts = {};
+          currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
+          
+          let sets = Math.min(...Object.keys(itemCounts).map(id => {
+            let origItem = available.find(a => a.id == id);
+            return Math.floor(origItem.reel / itemCounts[id]);
+          }));
+
+          if (sets > 0) {
+            let reelsProcessed = sets * currentCombo.length;
+            
+            // FIFO Scoring: Older items have lower IDs. We prioritize consuming them.
+            let ageScore = 0;
+            currentCombo.forEach(c => {
+                ageScore += (10000000 - c.id); 
+            });
+            let totalAgeScore = ageScore * sets;
+            
+            let score = (reelsProcessed * 10000000000) + (totalAgeScore * 1000) + currentSize;
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestCombo = currentCombo.map(c => ({...c}));
+            }
           }
-        } catch (e) {
-          console.error("Could not load saved data", e);
+        }
+
+        // Limit to 7 side-by-side matches for optimal math
+        if (currentCombo.length >= 7) return;
+
+        for (let i = startIndex; i < available.length; i++) {
+          let item = available[i];
+          let newSize = currentSize + item.size;
+          if (newSize > rule.max) continue;
+
+          let countUsed = usedCounts[item.id] || 0;
+          if (item.reel < countUsed + 1) continue;
+          
+          // STRICT DIA MATCHING
+          if (currentCombo.length > 0 && item.dia !== currentCombo[0].dia) continue;
+
+          let newMinBf = Math.min(minBf, item.bf);
+          let newMaxBf = Math.max(maxBf, item.bf);
+          if (newMaxBf - newMinBf > 2) continue;
+
+          currentCombo.push(item);
+          usedCounts[item.id] = countUsed + 1;
+
+          search(i, currentCombo, newSize, newMinBf, newMaxBf, usedCounts);
+
+          currentCombo.pop();
+          usedCounts[item.id] = countUsed;
         }
       }
-    }
 
-    function clearAllData() {
-      const confirmDelete = confirm("Are you sure you want to delete all saved data? You will need to upload CSVs again.");
-      if (confirmDelete) {
-        localStorage.removeItem('deckleSavedMatchData');
-        tallyData = [];
-        portalData = [];
-        matchedList = [];
-        missingInTally = [];
-        missingInPortal = [];
+      for (let i = 0; i < available.length; i++) {
+        let used = {};
+        used[available[i].id] = 1;
+        search(i, [available[i]], available[i].size, available[i].bf, available[i].bf, used);
+      }
+
+      if (bestCombo) {
+        let itemCounts = {};
+        bestCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
         
-        renderTables();
-        updateSummary();
+        let sets = Math.min(...Object.keys(itemCounts).map(id => {
+          let origItem = available.find(a => a.id == id);
+          return Math.floor(origItem.reel / itemCounts[id]);
+        }));
+
+        Object.keys(itemCounts).forEach(id => {
+          let orig = items.find(item => item.id == id);
+          orig.reel -= (sets * itemCounts[id]);
+        });
+
+        // Use displaySize to support visual inch markers
+        let sizeEquation = bestCombo.length > 1 ? bestCombo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ') : '';
+        let totalSize = bestCombo.reduce((sum, c) => sum + c.size, 0);
+
+        matchRows.push({
+          comboData: bestCombo, 
+          customer: bestCombo.map(c => c.customer).join(', '),
+          gsm: bestCombo[0].gsm,
+          bf: bestCombo[0].bf,
+          _size: totalSize,
+          combo_str: sizeEquation,
+          reel: sets, 
+          dia: bestCombo[0].dia,
+          tons: (totalSize / 2.54 * 12.2 * sets) / 1000,
+          _match: true
+        });
+      } else {
+        keepMatching = false;
+      }
+    }
+  });
+
+  let matchedCombos = [...matchRows]; 
+  let unMatched = [];
+  
+  // Push anything with remaining inventory into the unmatched view
+  Object.keys(groups).forEach(key => {
+     groups[key].forEach(item => {
+        if (item.reel > 0) {
+           unMatched.push({
+              ...item,
+              _size: item.size,
+              displaySize: item.displaySize,
+              tons: (item.size / 2.54 * 12.2 * item.reel) / 1000,
+              _match: false
+           });
+        }
+     });
+  });
+
+  matchRows = [...matchedCombos, ...unMatched];
+
+  document.getElementById('deckleInfo').innerHTML  =
+    `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
+  document.getElementById('statsBar').style.display = 'flex';
+
+  currentFilter = 'match';
+  setFilter('match');
+}
+
+// ── Manual Matched Data Clear ──────────────────────────────────────────────
+function clearMatchedData() {
+  let matchedRows = matchRows.filter(r => r._match);
+  if (matchedRows.length === 0) {
+    toast('No matched data to clear.', true);
+    return;
+  }
+  
+  if (!confirm("Are you sure you want to remove the matched reels from inventory?")) return;
+
+  matchedRows.forEach(mRow => {
+      let groupedCombo = {};
+      mRow.comboData.forEach(c => {
+          if(!groupedCombo[c.id]) groupedCombo[c.id] = 0;
+          groupedCombo[c.id] += 1;
+      });
+      
+      Object.keys(groupedCombo).forEach(idStr => {
+          let id = parseInt(idStr);
+          let consumedReels = groupedCombo[id] * mRow.reel;
+          
+          let target = allRows.find(row => row.id === id);
+          if (target) {
+              target.reel -= consumedReels;
+          }
+      });
+  });
+
+  allRows = allRows.filter(row => row.reel > 0);
+  
+  toast('✓ Matched Orders Cleared');
+  
+  if (viewMode === 'data') {
+      showDataPage();
+  } else {
+      runMatch();
+  }
+}
+
+// ── Suggestion Engine (Cross-Customer Combination Gap Analysis) ────────────
+function updateSuggestionBoard() {
+  const board = document.getElementById('suggestionBoard');
+  const list = document.getElementById('suggestionList');
+
+  // Only show when viewing Unmatched records
+  if (viewMode !== 'match' || currentFilter !== 'nomatch' || viewRows.length === 0) {
+    board.style.display = 'none';
+    return;
+  }
+
+  const idx  = parseInt(document.getElementById('deckleSelect').value);
+  const rule = rules[idx];
+  if (!rule) return;
+
+  // 1. Group unmatched rows by strict constraints: GSM, BF, Dia
+  let groups = {};
+  viewRows.forEach(row => {
+    let key = `${row.gsm}_${row.bf}_${row.dia}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  });
+
+  let suggestions = [];
+
+  // 2. Find combinations across multiple customers within each group
+  Object.values(groups).forEach(items => {
+    function search(startIndex, currentCombo, currentSize, usedCounts) {
+      
+      // RULE: Only analyze combinations that have a MINIMUM of 2 side-by-side reels
+      if (currentCombo.length >= 2) {
+        let gapMin = rule.min - currentSize;
+        let gapMax = rule.max - currentSize;
+
+        // Only suggest if there's a practical gap to fill
+        if (gapMax >= 0) {
+          let itemCounts = {};
+          currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
+          
+          let isHypothetical = false;
+          let extraReelsCount = 0;
+          let sets = Infinity;
+
+          Object.keys(itemCounts).forEach(id => {
+            let origItem = items.find(a => a.id == id);
+            if (itemCounts[id] > origItem.reel) {
+                isHypothetical = true;
+                extraReelsCount += (itemCounts[id] - origItem.reel);
+            } else {
+                if (!isHypothetical) {
+                    sets = Math.min(sets, Math.floor(origItem.reel / itemCounts[id]));
+                }
+            }
+          });
+
+          // RULE: Cap hypothetical extra reels so the suggestions remain realistic
+          if (extraReelsCount <= 4) {
+              if (isHypothetical) sets = 1; // Creates 1 custom run based on the specific extra reels asked
+
+              if (sets > 0 && sets !== Infinity) {
+                let printNames = [];
+                Object.keys(itemCounts).forEach(id => {
+                    let origItem = items.find(a => a.id == id);
+                    let used = itemCounts[id];
+                    let extra = Math.max(0, used - origItem.reel);
+                    
+                    let text = `<b>${origItem.customer}</b> [${origItem.displaySize || Number(origItem.size).toFixed(2)}]`;
+                    if (used > 1) text += ` x${used}`;
+                    
+                    // RULE: Feature explicitly showing extra asked qty of existing size
+                    if (extra > 0) text += ` <span style="color:var(--amber);">(Ask +${extra} extra)</span>`;
+                    printNames.push(text);
+                });
+                
+                let namesStr = printNames.join(' &nbsp;,&nbsp; ');
+                let comboStrHtml = currentCombo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ');
+                
+                let gsm = currentCombo[0].gsm;
+                let bf = currentCombo[0].bf;
+                let dia = currentCombo[0].dia;
+
+                // RULE: Completely removed the word "Sets" from output
+                let reelText = `(${sets} reel${sets > 1 ? 's' : ''})`;
+                let mainNeedStr = "";
+                let fillerStr = "";
+
+                if (gapMax >= 0 && gapMin <= 0) {
+                    mainNeedStr = "PERFECT DECKLE";
+                } else {
+                    let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
+                    
+                    // RULE: If gap is > 200, strictly ONLY split it.
+                    if (gapMax > 200) {
+                        let fillers = [];
+                        let split2Min = gapMin > 0 ? gapMin / 2 : 0;
+                        fillers.push(`<b>${split2Min.toFixed(2)} to ${(gapMax/2).toFixed(2)}</b> (${sets * 2} reels)`);
+                        
+                        if (gapMax > 180) { // Keep standard split logic bounds
+                            let split3Min = gapMin > 0 ? gapMin / 3 : 0;
+                            fillers.push(`<b>${split3Min.toFixed(2)} to ${(gapMax/3).toFixed(2)}</b> (${sets * 3} reels)`);
+                        }
+                        if (gapMax > 240) {
+                            let split4Min = gapMin > 0 ? gapMin / 4 : 0;
+                            fillers.push(`<b>${split4Min.toFixed(2)} to ${(gapMax/4).toFixed(2)}</b> (${sets * 4} reels)`);
+                        }
+                        mainNeedStr = `Need split sizes: ${fillers.join(' &nbsp;OR&nbsp; ')}`;
+                    } 
+                    // RULE: If gap is between 125 and 200, show raw gap AND split options.
+                    else if (gapMax > 125) {
+                        mainNeedStr = `Need ${needStr} ${reelText}`;
+                        let fillers = [];
+                        let split2Min = gapMin > 0 ? gapMin / 2 : 0;
+                        fillers.push(`<b>${split2Min.toFixed(2)} to ${(gapMax/2).toFixed(2)}</b> (${sets * 2} reels)`);
+                        
+                        if (gapMax > 180) {
+                            let split3Min = gapMin > 0 ? gapMin / 3 : 0;
+                            fillers.push(`<b>${split3Min.toFixed(2)} to ${(gapMax/3).toFixed(2)}</b> (${sets * 3} reels)`);
+                        }
+                        fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try split sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
+                    } 
+                    // RULE: If gap is < 125, strictly DO NOT split it. Just show raw gap.
+                    else {
+                        mainNeedStr = `Need ${needStr} ${reelText}`;
+                    }
+                }
+
+                // SCORING: Prioritize non-hypothetical combinations that eat up the most current size.
+                // Minor penalty for extra hypothetical reels ensures native matches rank higher.
+                let baseScore = (sets * currentSize) + (currentCombo.length * 10);
+                let finalScore = baseScore - (extraReelsCount * 20);
+
+                let html = `<div class="suggestion-item">
+                    <div style="margin-bottom:4px;"><span style="font-size:11px; color:var(--sub);">GSM ${gsm} | BF ${bf} | Dia ${dia}</span> &nbsp;•&nbsp; <span style="font-size:12px; color:var(--text);">${namesStr}</span></div>
+                    <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">${mainNeedStr}</b>
+                    ${fillerStr}
+                </div>`;
+
+                suggestions.push({
+                    score: finalScore, 
+                    html: html,
+                    comboKey: currentCombo.map(c => c.id).sort().join('_') // deduplication key
+                });
+              }
+          }
+        }
+      }
+
+      // Allow deep combinations to find best gaps
+      if (currentCombo.length >= 7) return;
+
+      for (let i = startIndex; i < items.length; i++) {
+        let item = items[i];
+        let newSize = currentSize + item.size;
+        if (newSize > rule.max) continue;
+
+        let countUsed = usedCounts[item.id] || 0;
         
-        document.getElementById('portalFile').value = '';
-        document.getElementById('tallyFile').value = '';
-        document.getElementById('portalStatus').innerText = 'No file selected';
-        document.getElementById('tallyStatus').innerText = 'No file selected';
-        
-        alert("All saved data has been cleared!");
+        // RULE: Limit to max 4 extra hypothetical reels per item to avoid infinite calculation loops
+        if (countUsed >= item.reel + 4) continue; 
+
+        currentCombo.push(item);
+        usedCounts[item.id] = countUsed + 1;
+
+        search(i, currentCombo, newSize, usedCounts);
+
+        currentCombo.pop();
+        usedCounts[item.id] = countUsed;
       }
     }
 
-    // Automatically load saved state when browser or app opens
-    window.addEventListener('DOMContentLoaded', loadFromLocalMemory);
-  </script>
+    for (let i = 0; i < items.length; i++) {
+      let used = {};
+      used[items[i].id] = 1;
+      search(i, [items[i]], items[i].size, used);
+    }
+  });
+
+  // Deduplicate identical combinations to keep the list clean
+  let uniqueMap = new Map();
+  suggestions.forEach(s => {
+      if (!uniqueMap.has(s.comboKey) || uniqueMap.get(s.comboKey).score < s.score) {
+          uniqueMap.set(s.comboKey, s);
+      }
+  });
+
+  // Sort by highest impact score and take top 15 suggestions
+  let finalSuggestions = Array.from(uniqueMap.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 15)
+    .map(s => s.html);
+
+  if (finalSuggestions.length > 0) {
+    list.innerHTML = finalSuggestions.join('');
+    board.style.display = 'block';
+  } else {
+    board.style.display = 'none';
+  }
+}
+
+// ── Filter ─────────────────────────────────────────────────────────────────
+function setFilter(f) {
+  if(viewMode === 'data') return;
+  
+  viewMode = 'match';
+  currentFilter = f;
+  document.querySelectorAll('.pill').forEach(p => {
+    p.className = 'pill';
+    if (p.dataset.filter === f) {
+      if (f === 'all')     p.classList.add('active-all');
+      if (f === 'match')   p.classList.add('active-match');
+      if (f === 'nomatch') p.classList.add('active-nomatch');
+    }
+  });
+  if (matchRows.length) applyFilter(f);
+}
+
+function applyFilter(f) {
+  if (f === 'match')   viewRows = matchRows.filter(r => r._match);
+  else if (f === 'nomatch') viewRows = matchRows.filter(r => !r._match);
+  else viewRows = [...matchRows];
+  
+  if (f === 'match') {
+    viewRows.sort((a, b) => {
+      if (b.reel !== a.reel) return b.reel - a.reel; 
+      return b._size - a._size; 
+    });
+  } else {
+    viewRows.sort((a, b) => b._size - a._size);
+  }
+  
+  renderTable();
+}
+
+// ── Sort ───────────────────────────────────────────────────────────────────
+function sortTable(key) {
+  if (sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = true; }
+
+  document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
+  let headerCells = document.querySelectorAll('thead th');
+  if (headerCells.length > 0) {
+    let clickedHeader = Array.from(headerCells).find(th => th.getAttribute('onclick') && th.getAttribute('onclick').includes(key));
+    if(clickedHeader) clickedHeader.classList.add('sorted');
+  }
+
+  viewRows.sort((a, b) => {
+    let va = key === 'size' ? (a._size || a.size) : a[key];
+    let vb = key === 'size' ? (b._size || b.size) : b[key];
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+  renderTable();
+}
+
+// ── Export Unmatched Excel ─────────────────────────────────────────────────
+function exportUnmatchedExcel() {
+  if (!viewRows.length || currentFilter !== 'nomatch') return;
+  
+  try {
+      let exportData = viewRows.map(r => ({
+          "Customer": r.customer,
+          "GSM": r.gsm,
+          "BF": r.bf,
+          "Size": r.displaySize || Number(r.size).toFixed(2),
+          "Reels": r.reel,
+          "Dia": r.dia || '-',
+          "Tons": Number(r.tons.toFixed(3))
+      }));
+      
+      let ws = XLSX.utils.json_to_sheet(exportData);
+      let wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Unmatched Orders");
+      XLSX.writeFile(wb, "Unmatched_Orders.xlsx");
+      toast('✓ Excel Exported Successfully');
+  } catch(e) {
+      toast('Error exporting Excel', true);
+  }
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function renderTable() {
+  const thead = document.getElementById('tableHead');
+  const tbody = document.getElementById('tableBody');
+  const table = document.getElementById('resultsTable');
+  const empty = document.getElementById('emptyState');
+  const statsBar = document.getElementById('statsBar');
+  const dataForm = document.getElementById('dataEntryForm');
+  const actionBlock = document.getElementById('actionBlock');
+  const btnBack = document.getElementById('btnBackToMatches');
+  const btnEdit = document.getElementById('btnEditData');
+  const btnExportCSV = document.getElementById('btnExportCSV');
+
+  if (!allRows.length && viewMode !== 'data') {
+    table.style.display = 'none';
+    statsBar.style.display = 'none';
+    dataForm.style.display = 'none';
+    actionBlock.style.display = 'none';
+    document.getElementById('suggestionBoard').style.display = 'none';
+    empty.style.display = 'flex';
+    return;
+  }
+  
+  empty.style.display = 'none';
+  table.style.display = 'table';
+  
+  // Dynamic Action Block Logic
+  if (viewMode === 'data') {
+      statsBar.style.display = 'none';
+      dataForm.style.display = 'block';
+      actionBlock.style.display = 'block';
+      btnBack.style.display = matchRows.length > 0 ? 'inline-flex' : 'none';
+      btnEdit.style.display = 'inline-flex';
+      btnExportCSV.style.display = 'none';
+      
+      btnEdit.innerHTML = isEditingData ? '💾 Save' : '✏️ Edit';
+      btnEdit.style.background = isEditingData ? 'var(--accent)' : 'transparent';
+      btnEdit.style.color = isEditingData ? '#fff' : 'var(--sub)';
+      
+      document.getElementById('suggestionBoard').style.display = 'none';
+  } else {
+      statsBar.style.display = 'flex';
+      dataForm.style.display = 'none';
+      isEditingData = false;
+      
+      if (currentFilter === 'nomatch' && viewRows.length > 0) {
+          actionBlock.style.display = 'block';
+          btnBack.style.display = 'none';
+          btnEdit.style.display = 'none';
+          btnExportCSV.style.display = 'inline-flex';
+      } else {
+          actionBlock.style.display = 'none';
+      }
+  }
+  
+  if (viewMode !== 'data') {
+      let sumMatchedTons = matchRows.filter(r => r._match).reduce((sum, r) => sum + (r.tons || 0), 0);
+      let activeRows = allRows.filter(r => r._selected !== false);
+      let sumAllOrderTons = activeRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
+      let balanceTons = Math.max(0, sumAllOrderTons - sumMatchedTons);
+      let currentViewSets = viewRows.reduce((sum, r) => sum + (r.reel || 0), 0);
+      
+      document.getElementById('statOrderTons').textContent = sumAllOrderTons.toFixed(3);
+      document.getElementById('statBalanceTons').textContent = balanceTons.toFixed(3);
+      document.getElementById('statMatchedTons').textContent = sumMatchedTons.toFixed(3);
+      document.getElementById('statTotalSets').textContent = currentViewSets;
+  }
+
+  if (viewMode === 'data') {
+    let activeRows = allRows.filter(r => r._selected !== false);
+    let allSelected = allRows.length > 0 && activeRows.length === allRows.length;
+    
+    thead.innerHTML = `<tr>
+      <th class="center" style="width:50px;">
+         <input type="checkbox" ${allSelected ? 'checked' : ''} onchange="toggleAllSelection(this.checked)" style="width:18px;height:18px;accent-color:var(--accent);">
+      </th>
+      <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">Reels <span class="sort-arrow">↕</span></th>
+      <th class="center">Dia</th>
+      <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
+    </tr>`;
+
+    if(viewRows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="center" style="padding:40px; color:var(--sub);">No orders added yet. Add an order above.</td></tr>`;
+    } else {
+        tbody.innerHTML = viewRows.map(r => {
+          let custCell = isEditingData ? `<input type="text" class="edit-input" style="width:80px;" value="${r.customer}" onchange="updateData(${r.id}, 'customer', this.value)">` : r.customer;
+          
+          let gsmBfCell = isEditingData 
+              ? `<input type="number" class="edit-input" style="width:50px; margin-right:4px;" value="${r.gsm}" onchange="updateData(${r.id}, 'gsm', this.value)"> / <input type="number" class="edit-input" style="width:40px; margin-left:4px;" value="${r.bf}" onchange="updateData(${r.id}, 'bf', this.value)">`
+              : `${r.gsm} / ${r.bf}`;
+              
+          let safeSizeVal = String(r.displaySize || Number(r.size).toFixed(2)).replace(/"/g, '&quot;');
+          let sizeCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${safeSizeVal}" onchange="updateData(${r.id}, 'size', this.value)">` : (r.displaySize || Number(r.size).toFixed(2));
+          let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:50px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
+          let diaCell = isEditingData ? `<input type="text" class="edit-input" style="width:50px;" value="${r.dia}" onchange="updateData(${r.id}, 'dia', this.value)">` : (r.dia || '-');
+            
+          return `<tr class="data-row" onmousedown="startPress(${r.id})" onmouseup="endPress()" onmouseleave="endPress()" ontouchstart="startPress(${r.id})" ontouchend="endPress()" oncontextmenu="return false;">
+            <td class="center" style="padding:13px 14px;">
+              <input type="checkbox" ${r._selected !== false ? 'checked' : ''} onchange="toggleSelection(${r.id}, this.checked)" style="width:18px;height:18px;accent-color:var(--accent);">
+            </td>
+            <td class="customer" style="padding:13px 14px;">${custCell}</td>
+            <td class="center" style="padding:13px 14px;">${gsmBfCell}</td>
+            <td class="size-val center" style="padding:13px 14px;">${sizeCell}</td>
+            <td class="center" style="padding:13px 14px;">${reelCell}</td>
+            <td class="center" style="padding:13px 14px;">${diaCell}</td>
+            <td class="center" id="tons-${r.id}" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
+          </tr>`
+        }).join('');
+    }
+    
+  } else {
+    thead.innerHTML = `<tr>
+      <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('size')">Sizes & Deckle <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">Sets <span class="sort-arrow">↕</span></th>
+      <th class="center">Dia</th>
+      <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
+    </tr>`;
+
+    tbody.innerHTML = viewRows.map(r => {
+      const cls   = r._match ? 'row-match' : 'row-nomatch';
+      
+      let custHtml = `<div style="padding:13px 14px;">${r.customer}</div>`;
+      let gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
+
+      if (r._match && r.comboData) {
+        let groupedCombo = {};
+        r.comboData.forEach(c => {
+          if(!groupedCombo[c.id]) {
+            groupedCombo[c.id] = { ...c, count: 0 };
+          }
+          groupedCombo[c.id].count += 1;
+        });
+        let uniqueItems = Object.values(groupedCombo);
+
+        custHtml = uniqueItems.map((c, i) => {
+          let totalReelsUsedInCombo = c.count * r.reel;
+          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
+        }).join('');
+        
+        gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
+      }
+
+      return `<tr class="${cls}">
+        <td class="customer" style="padding:0; vertical-align:top;">
+          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+            ${custHtml}
+          </div>
+        </td>
+        <td class="center" style="padding:0; vertical-align:middle;">
+          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+            ${gsmBfHtml}
+          </div>
+        </td>
+        <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
+          ${r._match && r.combo_str ? `<div style="font-size:14px; color:var(--accent); margin-bottom:8px; font-weight:900; letter-spacing:0.5px; background:rgba(79,142,247,0.1); padding:6px 10px; border-radius:6px; display:inline-block; border: 1px solid rgba(79,142,247,0.3);">${r.combo_str}</div>` : ''}
+          <div style="font-size:16px; font-weight:bold; color:var(--green);">${r._match ? Number(r._size).toFixed(2) : (r.displaySize || Number(r.size).toFixed(2))}</div>
+        </td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.dia || '-'}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
+      </tr>`;
+    }).join('');
+    
+    // Call the suggestion engine update when rendering the match/unmatched view
+    updateSuggestionBoard();
+  }
+}
+
+// ── Export PDF ─────────────────────────────────────────────────────────────
+function exportPDF() {
+  if (!viewRows.length) { toast('No data to export', true); return; }
+  
+  try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('landscape');
+      
+      let head = [];
+      let body = [];
+      let title = "";
+
+      if (viewMode === 'data') {
+          title = "Manage Data";
+          head = [['Customer', 'GSM / BF', 'Size', 'Reels', 'Dia', 'Tons']];
+          body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
+      } else {
+          title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
+          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets', 'Dia', 'Tons']];
+          
+          body = viewRows.map(r => {
+              let custStr = r.customer;
+              let gsmBfStr = `${r.gsm} / ${r.bf}`;
+              let sizeStr = r.displaySize || Number(r._size || r.size).toFixed(2);
+              
+              if (r._match && r.comboData) {
+                  let groupedCombo = {};
+                  r.comboData.forEach(c => {
+                    if(!groupedCombo[c.id]) groupedCombo[c.id] = { ...c, count: 0 };
+                    groupedCombo[c.id].count += 1;
+                  });
+                  let uniqueItems = Object.values(groupedCombo);
+                  
+                  // Construct clean multi-line string for PDF cells
+                  custStr = uniqueItems.map(c => `${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${c.count * r.reel})`).join('\n');
+                  sizeStr = r.combo_str ? `${r.combo_str}\nTotal: ${Number(r._size).toFixed(2)}` : `${Number(r._size).toFixed(2)}`;
+              }
+              
+              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)];
+          });
+      }
+
+      doc.setFontSize(14);
+      doc.text(`Deckle Match - ${title}`, 14, 15);
+      
+      doc.autoTable({
+          startY: 20,
+          head: head,
+          body: body,
+          theme: 'grid',
+          headStyles: { fillColor: [79, 142, 247] },
+          styles: { fontSize: 10, cellPadding: 4, valign: 'middle' }
+      });
+
+      doc.save(`Deckle_Match_${title.replace(/\s+/g, '_')}.pdf`);
+      toast('✓ PDF Exported Successfully');
+  } catch (e) {
+      console.error(e);
+      toast('Error exporting PDF', true);
+  }
+}
+
+// ── Clear All Confirmation ─────────────────────────────────────────────────
+function clearAll() {
+  if (!confirm("Are you sure you want to clear all data? This cannot be undone.")) return;
+  
+  allRows = matchRows = viewRows = loadedFiles = [];
+  viewMode = 'match';
+  isEditingData = false;
+  document.getElementById('fileLoadedBlock').style.display = 'none';
+  document.getElementById('uploadZone').style.display = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('appendInput').value = '';
+  document.getElementById('resultsTable').style.display = 'none';
+  document.getElementById('statsBar').style.display = 'none';
+  document.getElementById('actionBlock').style.display = 'none';
+  document.getElementById('dataEntryForm').style.display = 'none';
+  document.getElementById('suggestionBoard').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'flex';
+  document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
+  document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file or click \'Manage Data\' to add manual orders.';
+  
+  document.querySelector('.main').classList.remove('sidebar-hidden');
+  toast('Cleared');
+}
+
+// ── Deckle Rules Modal ─────────────────────────────────────────────────────
+function openModal() {
+  renderRuleList();
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+  document.getElementById('newName').value = '';
+  document.getElementById('newMin').value  = '';
+  document.getElementById('newMax').value  = '';
+}
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+function renderRuleList() {
+  document.getElementById('ruleList').innerHTML = rules.map((r, i) => `
+    <div class="rule-item">
+      <div>
+        <div class="rule-name">${r.name}</div>
+        <div class="rule-range">${r.min} – ${r.max} mm</div>
+      </div>
+      <div class="rule-actions">
+        <button class="btn-sm danger" onclick="deleteRule(${i})">✕ Delete</button>
+      </div>
+    </div>
+  `).join('') || '<div style="color:var(--sub);font-size:13px;padding:8px 0;">No deckle ranges defined yet.</div>';
+}
+
+function addRule() {
+  const name = document.getElementById('newName').value.trim();
+  const min  = parseFloat(document.getElementById('newMin').value);
+  const max  = parseFloat(document.getElementById('newMax').value);
+  if (!name)        { toast('Please enter a name', true); return; }
+  if (isNaN(min))   { toast('Enter a valid min size', true); return; }
+  if (isNaN(max))   { toast('Enter a valid max size', true); return; }
+  if (min >= max)   { toast('Max must be greater than Min', true); return; }
+  rules.push({ name, min, max });
+  saveRules();
+  refreshSelect();
+  renderRuleList();
+  document.getElementById('newName').value = '';
+  document.getElementById('newMin').value  = '';
+  document.getElementById('newMax').value  = '';
+  toast(`✓ Added "${name}"`);
+}
+
+function deleteRule(i) {
+  if (rules.length === 1) { toast("Can't delete the last deckle", true); return; }
+  const name = rules[i].name;
+  rules.splice(i, 1);
+  saveRules();
+  refreshSelect();
+  renderRuleList();
+  toast(`Deleted "${name}"`);
+}
+
+// ── Uploaded Files Modal ───────────────────────────────────────────────────
+function openFileModal() {
+    let html = loadedFiles.map(f => {
+        let safeF = f.replace(/'/g, "\\'");
+        return `<div class="rule-item">
+          <div class="rule-name">${f}</div>
+          <div class="rule-actions">
+            <button class="btn-sm danger" onclick="removeFile('${safeF}')">✕ Remove</button>
+          </div>
+        </div>`;
+    }).join('');
+    
+    document.getElementById('fileList').innerHTML = html || '<div style="color:var(--sub);font-size:13px;padding:8px 0;">No files loaded.</div>';
+    document.getElementById('fileModalOverlay').classList.add('show');
+}
+function closeFileModal() { document.getElementById('fileModalOverlay').classList.remove('show'); }
+function handleFileOverlayClick(e) { if (e.target === document.getElementById('fileModalOverlay')) closeFileModal(); }
+
+function removeFile(fname) {
+    loadedFiles = loadedFiles.filter(f => f !== fname);
+    allRows = allRows.filter(r => r.fileName !== fname);
+    
+    if (loadedFiles.length === 0) {
+        closeFileModal();
+        clearAll();
+        return;
+    }
+    
+    updateFileBadge();
+    toast(`Removed ${fname}`);
+    
+    if (viewMode === 'data') showDataPage();
+    else runMatch();
+    
+    openFileModal(); // Refresh the list
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = isErr ? 'rgba(224,92,106,0.2)' : 'var(--card2)';
+  el.style.color      = isErr ? 'var(--red)' : 'var(--text)';
+  el.style.borderColor= isErr ? 'var(--red)' : 'var(--border)';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+refreshSelect();
+</script>
 </body>
 </html>
