@@ -1101,6 +1101,7 @@ function showDataPage() {
   saveAppState();
 }
 
+// ── MATCHING ENGINE: Prioritizes combining checked rows into full sets ──
 function runMatch() {
   let activeRows = allRows.filter(r => r._selected !== false);
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
@@ -1284,7 +1285,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── SUGGESTION ENGINE: Strict >=65 cm, Clean UI, Auto-Split if >=150 cm, Residual coverage ──
+// ── REFINED SUGGESTION ENGINE: Strict > 150 divisor loop & Leftover coverage ──
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1318,14 +1319,13 @@ function updateSuggestionBoard() {
     let formatSize = (val) => Number(val).toFixed(2) + ' cm';
     let toRangeStr = (minNeed, maxNeed) => `${Number(minNeed).toFixed(1)} cm to ${Number(maxNeed).toFixed(1)} cm`;
 
-    // Helper to evaluate and generate HTML for any given reel subset
     let evaluateSubset = (sub) => {
       let bfs = sub.map(c => c.bf);
       if (Math.max(...bfs) - Math.min(...bfs) > 2) return null;
 
       let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
       let gap = rule.min - subTotal;
-      if (gap < 65) return null; // Ignore anything below 65 cm
+      if (gap < 65) return null; // STRICT RULE: Ignore gaps under 65 cm
 
       let minNeed = rule.min - subTotal;
       let maxNeed = rule.max - subTotal;
@@ -1336,34 +1336,35 @@ function updateSuggestionBoard() {
       let maxBf = Math.max(...sub.map(c => c.bf));
       let dia = sub[0].dia;
 
-      // RULE: If minNeed >= 150 cm -> automatically divide needed size by 2 and double reels
-      if (minNeed >= 150) {
-        let splitMin = minNeed / 2;
-        let splitMax = maxNeed / 2;
-        let neededReels = Math.max(2, Math.round(minNeed / sub[0].size) * 2);
-        let needStr = toRangeStr(splitMin, splitMax);
+      // Accurately determine how many sets we can run based on actual selected inventory
+      let counts = {};
+      sub.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
+      let sets = Math.min(...Object.keys(counts).map(id => {
+        let available = unmatchedReelsList.filter(a => a.id == id).length;
+        return Math.floor(available / counts[id]);
+      }));
+      if (sets < 1) sets = 1;
 
-        return {
-          html: `<div class="suggestion-item">
-            <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
-            <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${formatSize(subTotal)}<br>
-            ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReels} reels)</b>
-          </div>`,
-          usedIds: sub.map(c => c.id)
-        };
-      } else {
-        let neededReels = Math.max(1, Math.round(minNeed / sub[0].size));
-        let needStr = toRangeStr(minNeed, maxNeed);
-
-        return {
-          html: `<div class="suggestion-item">
-            <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
-            <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${formatSize(subTotal)}<br>
-            ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReels} reel${neededReels > 1 ? 's' : ''})</b>
-          </div>`,
-          usedIds: sub.map(c => c.id)
-        };
+      // STRICT RULE: If the needed gap is above 150 cm, divide it until it drops below 150 cm.
+      let parts = 1;
+      while ((minNeed / parts) > 150) {
+        parts++;
       }
+
+      let splitMin = minNeed / parts;
+      let splitMax = maxNeed / parts;
+      let neededReels = sets * parts; // Exactly calculates required parts across available sets
+
+      let needStr = toRangeStr(splitMin, splitMax);
+
+      return {
+        html: `<div class="suggestion-item">
+          <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
+          <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${formatSize(subTotal)}<br>
+          ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReels} reel${neededReels > 1 ? 's' : ''})</b>
+        </div>`,
+        usedIds: sub.map(c => c.id)
+      };
     };
 
     let getCombos = (arr, k) => {
@@ -1386,7 +1387,7 @@ function updateSuggestionBoard() {
     let bestResult = null;
     let minGap = Infinity;
 
-    // 1. Evaluate primary combination (largest possible valid combination >= 65 cm gap)
+    // Evaluate combinations starting from largest sub-group down to 1
     for (let size = Math.min(4, unmatchedReelsList.length); size >= 1; size--) {
       let subsets = getCombos(unmatchedReelsList, size);
       for (let sub of subsets) {
@@ -1406,13 +1407,14 @@ function updateSuggestionBoard() {
     if (bestResult) {
       finalSuggestions.push(bestResult.html);
 
-      // 2. Evaluate leftover stock (e.g. leftover 81 cm reel) so nothing is ignored
+      // Extract left-over reels that weren't used in the primary recommendation (like your 81.28 cm extra reel)
       let leftoverReels = [...unmatchedReelsList];
       bestResult.usedIds.forEach(usedId => {
         let idx = leftoverReels.findIndex(r => r.id === usedId);
         if (idx > -1) leftoverReels.splice(idx, 1);
       });
 
+      // Provide a secondary recommendation specifically to address those leftover reels
       if (leftoverReels.length > 0) {
         let leftoverResult = null;
         let leftMinGap = Infinity;
@@ -1704,7 +1706,7 @@ function exportPDF() {
           body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
-          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Reels', 'Dia', 'Tons']];
+          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets', 'Dia', 'Tons']];
           body = viewRows.map(r => {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm} / ${r.bf}`;
