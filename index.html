@@ -1284,7 +1284,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── Suggestion Engine (Strictly handling all 4 scenarios with exact unrounded sizes) ─
+// ── Suggestion Engine (Strictly utilizing all unmatched reels with exact unrounded sizes) ─
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1316,7 +1316,6 @@ function updateSuggestionBoard() {
     });
 
     let count = unmatchedReelsList.length;
-    let totalUnmatchedSum = unmatchedReelsList.reduce((sum, c) => sum + c.size, 0);
     let formatSize = (mm) => mm.toFixed(2) + ' mm';
 
     let getCombos = (arr, k) => {
@@ -1336,7 +1335,7 @@ function updateSuggestionBoard() {
       return results;
     };
 
-    // ── SCENARIO 4 Check: Total unmatched sum close to deckle range ──
+    // ── SCENARIO 4: Check if any subset of remaining reels sums close to deckle (within 120 mm below min) ──
     let scenario4Found = false;
     for (let size = Math.min(4, unmatchedReelsList.length); size >= 2; size--) {
       let subsets = getCombos(unmatchedReelsList, size);
@@ -1350,7 +1349,7 @@ function updateSuggestionBoard() {
           let maxNeed = rule.max - subSum;
           let comboStr = sub.map(c => formatSize(c.size)).join(' + ');
 
-          // Condition: If minNeed size is >= 650 mm (65 cm), do NOT split. Just ask single size.
+          // Condition: If minNeed size is >= 650 mm, do NOT split. Just ask the single size.
           if (minNeed >= 650) {
             let needStr = `${formatSize(minNeed)} to ${formatSize(maxNeed)}`;
             let neededReelQty = Math.max(1, Math.round(minNeed / sub[0].size));
@@ -1363,7 +1362,7 @@ function updateSuggestionBoard() {
             scenario4Found = true;
             break;
           } 
-          // If minNeed is below 650 mm (< 65 cm), split the size
+          // If minNeed is below 650 mm (e.g. 40, 50, 63 mm), split the size
           else {
             let rToSplit = sub[0];
             let splitSize3 = formatSize(rToSplit.size / 3);
@@ -1390,6 +1389,7 @@ function updateSuggestionBoard() {
       let bestMatch = null;
       let minGap = Infinity;
 
+      // Ensure we test combinations including the smaller reels (like 74mm)
       for (let size = 3; size <= Math.min(4, unmatchedReelsList.length); size++) {
         let subsets = getCombos(unmatchedReelsList, size);
         for (let sub of subsets) {
