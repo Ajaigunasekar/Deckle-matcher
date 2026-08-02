@@ -1101,6 +1101,7 @@ function showDataPage() {
   saveAppState();
 }
 
+// ── MATCHING ENGINE: Prioritizes combining checked rows into full sets ──
 function runMatch() {
   let activeRows = allRows.filter(r => r._selected !== false);
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
@@ -1133,6 +1134,7 @@ function runMatch() {
           let itemCounts = {};
           currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
           
+          // Calculates sets executable across selected items regardless of leftover reels
           let sets = Math.min(...Object.keys(itemCounts).map(id => {
             let origItem = available.find(a => a.id == id);
             return Math.floor(origItem.reel / itemCounts[id]);
@@ -1284,7 +1286,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── Strict Suggestion Engine (Clean UI, >= 65 cm Gap Only, No Split Output) ──
+// ── CLEAN SUGGESTION ENGINE: Strict >=65 cm gap, No scenario labels, No split text ──
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1318,7 +1320,6 @@ function updateSuggestionBoard() {
     let formatSize = (val) => Number(val).toFixed(2) + ' cm';
     let toRangeStr = (minNeed, maxNeed) => `${Number(minNeed).toFixed(1)} cm to ${Number(maxNeed).toFixed(1)} cm`;
 
-    // Helper to generate subsets of size k
     let getCombos = (arr, k) => {
       let results = [];
       let helper = (start, combo) => {
@@ -1339,7 +1340,6 @@ function updateSuggestionBoard() {
     let bestMatch = null;
     let minGap = Infinity;
 
-    // Evaluate combinations from 1 up to 4 reels in this group
     for (let size = 1; size <= Math.min(4, unmatchedReelsList.length); size++) {
       let subsets = getCombos(unmatchedReelsList, size);
       for (let sub of subsets) {
@@ -1349,7 +1349,7 @@ function updateSuggestionBoard() {
         let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
         let gap = rule.min - subTotal;
 
-        // STRICT THRESHOLD RULE: Only accept if the needed filler size is >= 65 cm
+        // ONLY suggest combinations where needed filler size is 65 cm or more
         if (gap >= 65 && gap < minGap) {
           minGap = gap;
           bestMatch = sub;
@@ -1365,7 +1365,6 @@ function updateSuggestionBoard() {
       let neededReelQty = Math.max(1, Math.round(minNeed / bestMatch[0].size));
       let needStr = toRangeStr(minNeed, maxNeed);
 
-      // Unique Customer summary without duplicates
       let uniqueCustomers = [...new Set(bestMatch.map(c => c.customer))].join(', ');
       let gsm = bestMatch[0].gsm;
       let maxBf = Math.max(...bestMatch.map(c => c.bf));
