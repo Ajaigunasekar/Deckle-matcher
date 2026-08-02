@@ -701,7 +701,7 @@
     
     <!-- Suggestion Board -->
     <div id="suggestionBoard" class="suggestion-board" style="display:none;">
-      <div class="suggestion-title">💡 PRECISE OPTIMIZATION SUGGESTIONS (UNMATCHED REELS)</div>
+      <div class="suggestion-title">💡 TARGETED DECKLE GAP FIXER (UNMATCHED REELS)</div>
       <div id="suggestionList"></div>
     </div>
 
@@ -1345,7 +1345,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── Suggestion Engine (Ultra-Precise & Logically Correct Partial Matching) ───
+// ── Suggestion Engine (Strictly Following Scenarios 1, 2, and 3) ─────────────
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1359,7 +1359,7 @@ function updateSuggestionBoard() {
   const rule = rules[idx];
   if (!rule) return;
 
-  // 1. Group unmatched inventory items by GSM & Dia (BF can vary by max 2)
+  // Group unmatched records by GSM and Dia
   let groups = {};
   viewRows.forEach(row => {
     let key = `${row.gsm}_${row.dia}`;
@@ -1367,124 +1367,101 @@ function updateSuggestionBoard() {
     groups[key].push(row);
   });
 
-  let rawSuggestions = [];
+  let finalSuggestions = [];
 
-  // 2. Evaluate high-probability partial combinations from remaining unmatched stock
   Object.values(groups).forEach(items => {
-    
-    // Helper to evaluate a set of selected unmatched items
-    function evaluateCombination(combo, totalSize) {
-      let gapMin = rule.min - totalSize;
-      let gapMax = rule.max - totalSize;
+    // Collect all individual unmatched reels for this GSM/Dia group
+    let unmatchedReelsList = [];
+    items.forEach(item => {
+      for (let r = 0; r < item.reel; r++) {
+        unmatchedReelsList.push(item);
+      }
+    });
 
-      // Must be under or within deckle limit, and leave a practical, fillable gap (between 10mm and 250mm)
-      if (gapMax >= 5 && gapMin <= 250) {
-        
-        // Verify BF variance constraint across the subset (Max diff <= 2)
-        let bfs = combo.map(c => c.bf);
-        if (Math.max(...bfs) - Math.min(...bfs) > 2) return;
+    let count = unmatchedReelsList.length;
 
-        // Tally stock requirements for this combination
-        let counts = {};
-        combo.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
+    if (count >= 3) {
+      // SCENARIO 1: 3 or more unmatched sizes available -> Sum them up and find remainder size to reach deckle range [rule.min to rule.max]
+      // Let's take the first 3 or 4 items that have close BF (max diff <= 2)
+      for (let i = 0; i < unmatchedReelsList.length; i++) {
+        for (let j = i + 1; j < unmatchedReelsList.length; j++) {
+          for (let k = j + 1; k < unmatchedReelsList.length; k++) {
+            let subCombo = [unmatchedReelsList[i], unmatchedReelsList[j], unmatchedReelsList[k]];
+            let bfs = subCombo.map(c => c.bf);
+            if (Math.max(...bfs) - Math.min(...bfs) <= 2) {
+              let subTotal = subCombo.reduce((sum, c) => sum + c.size, 0);
+              let minNeed = rule.min - subTotal;
+              let maxNeed = rule.max - subTotal;
 
-        // Calculate maximum sets executable with current stock
-        let maxSets = Infinity;
-        let missingReels = 0;
-        let deficitDetails = [];
+              if (maxNeed >= 10 && minNeed <= 250) {
+                let comboStr = subCombo.map(c => c.displaySize).join(' + ');
+                let needStr = minNeed > 0 ? `${minNeed.toFixed(1)} to ${maxNeed.toFixed(1)} mm` : `up to ${maxNeed.toFixed(1)} mm`;
+                
+                finalSuggestions.push(`<div class="suggestion-item">
+                  <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${subCombo[0].gsm} | Dia ${subCombo[0].dia} (Scenario 1 Match)</div>
+                  <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${subTotal.toFixed(1)} mm<br>
+                  ↳ Target Deckle range [${rule.min}-${rule.max}]. Add missing size: <b style="color:var(--red);">${needStr}</b>
+                </div>`);
+                
+                // Only give one best suggestion for scenario 1
+                break;
+              }
+            }
+          }
+          if (finalSuggestions.length > 0) break;
+        }
+        if (finalSuggestions.length > 0) break;
+      }
+    } 
+    else if (count === 2) {
+      // SCENARIO 2: Exactly 2 sizes available -> Provide multiple suggestions (Scenario 1 logic + split size option)
+      let r1 = unmatchedReelsList[0];
+      let r2 = unmatchedReelsList[1];
+      if (Math.abs(r1.bf - r2.bf) <= 2) {
+        let subTotal = r1.size + r2.size;
+        let minNeed = rule.min - subTotal;
+        let maxNeed = rule.max - subTotal;
 
-        Object.keys(counts).forEach(id => {
-          let itemObj = items.find(i => i.id == id);
-          let required = counts[id];
-          let available = itemObj.reel;
+        if (maxNeed >= 10) {
+          let needStr = minNeed > 0 ? `${minNeed.toFixed(1)} to ${maxNeed.toFixed(1)} mm` : `up to ${maxNeed.toFixed(1)} mm`;
           
-          let possibleSetsForThisItem = Math.floor(available / required);
-          maxSets = Math.min(maxSets, possibleSetsForThisItem);
+          // Suggestion A: Single filler size
+          finalSuggestions.push(`<div class="suggestion-item">
+            <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${r1.gsm} | Dia ${r1.dia} (Scenario 2 - Option A: Single Size Filler)</div>
+            <span style="color:var(--accent); font-family:var(--mono);">${r1.displaySize} + ${r2.displaySize}</span> = ${subTotal.toFixed(1)} mm<br>
+            ↳ Add single size filler: <b style="color:var(--red);">${needStr}</b>
+          </div>`);
 
-          if (available < required) {
-            let deficit = required - available;
-            missingReels += deficit;
-            deficitDetails.push(`+${deficit} reel(s) of <b>${itemObj.customer} [${itemObj.displaySize}]</b>`);
-          }
-        });
+          // Suggestion B: Split size option (divided by 2)
+          let splitMin = minNeed > 0 ? (minNeed / 2) : 10;
+          let splitMax = maxNeed / 2;
+          let splitNeedStr = `${splitMin.toFixed(1)} to ${splitMax.toFixed(1)} mm (x2 reels)`;
 
-        // STRICT LOGIC FILTER: Only recommend if it requires zero or at most 2 missing reels (highly actionable)
-        if (missingReels <= 2) {
-          let comboStr = combo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ');
-          let customerSummary = combo.map(c => `<b>${c.customer}</b> [${c.displaySize}]`).join(', ');
-          let gsm = combo[0].gsm;
-          let dia = combo[0].dia;
-
-          let recommendationText = "";
-          if (gapMin <= 0 && gapMax >= 0) {
-            recommendationText = `<b style="color:var(--green);">Perfect Deckle Match (0 waste gap)</b>`;
-          } else {
-            let needRange = gapMin > 0 ? `${gapMin.toFixed(1)} to ${gapMax.toFixed(1)} mm` : `up to ${gapMax.toFixed(1)} mm`;
-            recommendationText = `Add filler size of <b style="color:var(--red);">${needRange}</b>`;
-          }
-
-          let stockStatusHtml = "";
-          if (missingReels === 0) {
-            stockStatusHtml = `<span style="color:var(--green); font-size:12px;">✓ Fully actionable using existing unmatched stock (${maxSets} set(s) ready))</span>`;
-          } else {
-            stockStatusHtml = `<span style="color:var(--amber); font-size:12px;">⚡ Actionable by adding: ${deficitDetails.join(', ')}</span>`;
-          }
-
-          let score = totalSize - (missingReels * 50); // Higher deckle utilization with fewer missing parts ranks best
-
-          rawSuggestions.push({
-            score: score,
-            html: `<div class="suggestion-item">
-              <div style="margin-bottom:4px; font-size:11px; color:var(--sub);">GSM ${gsm} | Dia ${dia} | Customers: ${customerSizeSummary = customerSummary}</div>
-              <div style="font-family:var(--mono); font-size:14px; color:var(--accent); margin-bottom:4px;">${comboStr} = ${totalSize.toFixed(1)} mm</div>
-              <div style="margin-bottom:4px;">↳ ${recommendationText}</div>
-              <div>${stockStatusHtml}</div>
-            </div>`,
-            key: combo.map(c => c.id).sort().join('_')
-          });
+          finalSuggestions.push(`<div class="suggestion-item">
+            <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${r1.gsm} | Dia ${r1.dia} (Scenario 2 - Option B: Split Size Option)</div>
+            <span style="color:var(--accent); font-family:var(--mono);">${r1.displaySize} + ${r2.displaySize}</span> = ${subTotal.toFixed(1)} mm<br>
+            ↳ Add split sizes (divided by 2): <b style="color:var(--red);">${splitNeedStr}</b>
+          </div>`);
         }
       }
-    }
+    } 
+    else if (count === 1) {
+      // SCENARIO 3: Only 1 size remaining -> Ask size and reels numbers based on existing size
+      let r1 = unmatchedReelsList[0];
+      let minNeed = rule.min - r1.size;
+      let maxNeed = rule.max - r1.size;
+      let needStr = `${minNeed.toFixed(1)} to ${maxNeed.toFixed(1)} mm`;
 
-    // Recursive search across unmatched stock to build combinations of 2 to 5 reels
-    function buildCombos(startIndex, currentCombo, currentSize) {
-      if (currentCombo.length >= 2) {
-        evaluateCombination([...currentCombo], currentSize);
-      }
-      if (currentCombo.length >= 5 || currentSize >= rule.max) return;
-
-      for (let i = startIndex; i < items.length; i++) {
-        let item = items[i];
-        let newSize = currentSize + item.size;
-        if (newSize > rule.max + 20) continue; // Don't look at sizes way beyond max deckle
-
-        currentCombo.push(item);
-        buildCombos(i + 1, currentCombo, newSize); // i + 1 ensures unique distinct reels configuration
-        currentCombo.pop();
-      }
-    }
-
-    for (let i = 0; i < items.length; i++) {
-      buildCombos(i + 1, [items[i]], items[i].size);
-    }
-
-  });
-
-  // Deduplicate and select top 5 highest-quality logical recommendations
-  let uniqueMap = new Map();
-  rawSuggestions.forEach(s => {
-    if (!uniqueMap.has(s.key) || uniqueMap.get(s.key).score < s.score) {
-      uniqueMap.set(s.key, s);
+      finalSuggestions.push(`<div class="suggestion-item">
+        <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${r1.gsm} | Dia ${r1.dia} (Scenario 3 - Single Size Adjustment)</div>
+        Existing Size: <span style="color:var(--accent); font-family:var(--mono);">${r1.displaySize}</span><br>
+        ↳ Ask size between <b style="color:var(--red);">${needStr}</b> and required reel quantity to complete deckle.
+      </div>`);
     }
   });
 
-  let sortedSuggestions = Array.from(uniqueMap.values())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map(s => s.html);
-
-  if (sortedSuggestions.length > 0) {
-    list.innerHTML = sortedSuggestions.join('');
+  if (finalSuggestions.length > 0) {
+    list.innerHTML = finalSuggestions.join('');
     board.style.display = 'block';
   } else {
     board.style.display = 'none';
@@ -1715,7 +1692,7 @@ function renderTable() {
 
         custHtml = uniqueItems.map((c, i) => {
           let totalReelsUsedInCombo = c.count * r.reel;
-          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
+          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.displaySize || Number(r.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
         }).join('');
         
         let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
@@ -1944,7 +1921,7 @@ function toast(msg, isErr = false) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
-// ── Init ────────────────────────────────────────────────Ø──────────────────
+// ── Init ───────────────────────────────────────────────────────────────────
 refreshSelect();
 restoreAppState();
 </script>
