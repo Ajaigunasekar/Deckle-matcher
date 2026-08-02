@@ -701,7 +701,7 @@
     
     <!-- Suggestion Board -->
     <div id="suggestionBoard" class="suggestion-board" style="display:none;">
-      <div class="suggestion-title">💡 PRODUCTION SUGGESTIONS (UNMATCHED REELS)</div>
+      <div class="suggestion-title">💡 PRECISE OPTIMIZATION SUGGESTIONS (UNMATCHED REELS)</div>
       <div id="suggestionList"></div>
     </div>
 
@@ -773,7 +773,6 @@ function parseSizeInput(valStr) {
     if (!valStr) return { size: 0, displaySize: '0' };
     let str = String(valStr).toLowerCase().trim();
     
-    // Broad check for ANY quote-like character, prime, or 'in' abbreviation
     let isInch = str.includes('"') || 
                  str.includes('”') || 
                  str.includes('“') || 
@@ -803,11 +802,11 @@ let rules = JSON.parse(localStorage.getItem('deckleRules') || 'null') || [
 let allRows   = [];   
 let matchRows = [];   
 let viewRows  = [];   
-let loadedFiles = []; // Tracks uploaded file names
+let loadedFiles = []; 
 let currentFilter = 'all';
 let sortKey   = null;
 let sortAsc   = true;
-let viewMode  = 'match'; // Can be 'match' or 'data'
+let viewMode  = 'match'; 
 let isEditingData = false;
 
 // ── Persist Rules & Full Application State ────────────────────────────────
@@ -852,7 +851,6 @@ function restoreAppState() {
   if (viewMode === 'data') {
     showDataPage();
   } else {
-    // If matchRows existed, restore filtering; otherwise run match
     if (matchRows.length > 0) {
       const idx  = parseInt(document.getElementById('deckleSelect').value) || 0;
       const rule = rules[idx];
@@ -916,7 +914,6 @@ function handleFile(input, isAppend) {
         rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
       }
 
-      // Track file
       let currentFileName = file.name;
       if (!isAppend) {
           loadedFiles = [currentFileName];
@@ -924,7 +921,6 @@ function handleFile(input, isAppend) {
           if (!loadedFiles.includes(currentFileName)) loadedFiles.push(currentFileName);
       }
 
-      // ── ROBUST COLUMN MATCHING ──
       let newRows = rows.map((r, index) => {
         let rowStrKeys = Object.keys(r);
         
@@ -985,7 +981,7 @@ function handleFile(input, isAppend) {
       document.getElementById('fileLoadedBlock').style.display = 'flex';
       updateFileBadge();
       
-      input.value = ''; // Reset so the same file can be selected again if needed
+      input.value = ''; 
       showDataPage();
       saveAppState();
       
@@ -1004,7 +1000,7 @@ function toggleSelection(id, isChecked) {
     let vRow = viewRows.find(r => r.id === id);
     if (vRow) vRow._selected = isChecked;
     
-    renderTable(); // Refresh table strictly without re-sorting
+    renderTable(); 
     saveAppState();
 }
 
@@ -1043,17 +1039,14 @@ function updateData(id, field, value) {
             if(vRow) vRow[field] = parseFloat(value) || 0;
         }
         
-        // Recalculate tons silently on the specific row
         row.tons = (row.size / 2.54 * 12.2 * row.reel) / 1000;
         if(vRow) vRow.tons = row.tons;
     }
     
-    // Update top global stats instantly
     let activeRows = allRows.filter(r => r._selected !== false);
     let sumAllOrderTons = activeRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
     document.getElementById('statOrderTons').textContent = sumAllOrderTons.toFixed(3);
     
-    // Visually update the tons in the table without breaking input focus
     let tonsCell = document.getElementById(`tons-${id}`);
     if (tonsCell && row) {
         tonsCell.textContent = row.tons.toFixed(3);
@@ -1202,7 +1195,6 @@ function runMatch() {
           if (sets > 0) {
             let reelsProcessed = sets * currentCombo.length;
             
-            // FIFO Scoring: Older items have lower IDs. We prioritize consuming them.
             let ageScore = 0;
             currentCombo.forEach(c => {
                 ageScore += (10000000 - c.id); 
@@ -1218,7 +1210,6 @@ function runMatch() {
           }
         }
 
-        // Limit to 7 side-by-side matches for optimal math
         if (currentCombo.length >= 7) return;
 
         for (let i = startIndex; i < available.length; i++) {
@@ -1229,12 +1220,10 @@ function runMatch() {
           let countUsed = usedCounts[item.id] || 0;
           if (item.reel < countUsed + 1) continue;
           
-          // STRICT DIA MATCHING
           if (currentCombo.length > 0 && item.dia !== currentCombo[0].dia) continue;
 
           let newMinBf = Math.min(minBf, item.bf);
           let newMaxBf = Math.max(maxBf, item.bf);
-          // STRICT BF VARIANCE LIMIT: Max spread of 2 BF across any combination
           if (newMaxBf - newMinBf > 2) continue;
 
           currentCombo.push(item);
@@ -1267,7 +1256,6 @@ function runMatch() {
           orig.reel -= (sets * itemCounts[id]);
         });
 
-        // Use displaySize to support visual inch markers
         let sizeEquation = bestCombo.length > 1 ? bestCombo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ') : '';
         let totalSize = bestCombo.reduce((sum, c) => sum + c.size, 0);
 
@@ -1292,7 +1280,6 @@ function runMatch() {
   let matchedCombos = [...matchRows]; 
   let unMatched = [];
   
-  // Push anything with remaining inventory into the unmatched view
   Object.keys(groups).forEach(key => {
      groups[key].forEach(item => {
         if (item.reel > 0) {
@@ -1358,12 +1345,11 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── Suggestion Engine (Cross-Customer Combination Gap Analysis) ────────────
+// ── Suggestion Engine (Ultra-Precise & Logically Correct Partial Matching) ───
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
 
-  // Only show when viewing Unmatched records
   if (viewMode !== 'match' || currentFilter !== 'nomatch' || viewRows.length === 0) {
     board.style.display = 'none';
     return;
@@ -1373,184 +1359,132 @@ function updateSuggestionBoard() {
   const rule = rules[idx];
   if (!rule) return;
 
-  // 1. Group unmatched rows by strict constraints: GSM, BF, Dia
+  // 1. Group unmatched inventory items by GSM & Dia (BF can vary by max 2)
   let groups = {};
   viewRows.forEach(row => {
-    let key = `${row.gsm}_${row.bf}_${row.dia}`;
+    let key = `${row.gsm}_${row.dia}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(row);
   });
 
-  let suggestions = [];
+  let rawSuggestions = [];
 
-  // 2. Find combinations across multiple customers within each group
+  // 2. Evaluate high-probability partial combinations from remaining unmatched stock
   Object.values(groups).forEach(items => {
-    function search(startIndex, currentCombo, currentSize, usedCounts) {
-      
-      // RULE: Only analyze combinations that have a MINIMUM of 2 side-by-side reels
-      if (currentCombo.length >= 2) {
-        let gapMin = rule.min - currentSize;
-        let gapMax = rule.max - currentSize;
+    
+    // Helper to evaluate a set of selected unmatched items
+    function evaluateCombination(combo, totalSize) {
+      let gapMin = rule.min - totalSize;
+      let gapMax = rule.max - totalSize;
 
-        // Only suggest if there's a practical gap to fill
-        if (gapMax >= 0) {
-          let itemCounts = {};
-          currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
+      // Must be under or within deckle limit, and leave a practical, fillable gap (between 10mm and 250mm)
+      if (gapMax >= 5 && gapMin <= 250) {
+        
+        // Verify BF variance constraint across the subset (Max diff <= 2)
+        let bfs = combo.map(c => c.bf);
+        if (Math.max(...bfs) - Math.min(...bfs) > 2) return;
+
+        // Tally stock requirements for this combination
+        let counts = {};
+        combo.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
+
+        // Calculate maximum sets executable with current stock
+        let maxSets = Infinity;
+        let missingReels = 0;
+        let deficitDetails = [];
+
+        Object.keys(counts).forEach(id => {
+          let itemObj = items.find(i => i.id == id);
+          let required = counts[id];
+          let available = itemObj.reel;
           
-          let isHypothetical = false;
-          let extraReelsCount = 0;
-          let sets = Infinity;
+          let possibleSetsForThisItem = Math.floor(available / required);
+          maxSets = Math.min(maxSets, possibleSetsForThisItem);
 
-          Object.keys(itemCounts).forEach(id => {
-            let origItem = items.find(a => a.id == id);
-            if (itemCounts[id] > origItem.reel) {
-                isHypothetical = true;
-                extraReelsCount += (itemCounts[id] - origItem.reel);
-            } else {
-                if (!isHypothetical) {
-                    sets = Math.min(sets, Math.floor(origItem.reel / itemCounts[id]));
-                }
-            }
-          });
-
-          // RULE: Cap hypothetical extra reels so the suggestions remain realistic
-          if (extraReelsCount <= 4) {
-              if (isHypothetical) sets = 1; // Creates 1 custom run based on the specific extra reels asked
-
-              if (sets > 0 && sets !== Infinity) {
-                let printNames = [];
-                Object.keys(itemCounts).forEach(id => {
-                    let origItem = items.find(a => a.id == id);
-                    let used = itemCounts[id];
-                    let extra = Math.max(0, used - origItem.reel);
-                    
-                    let text = `<b>${origItem.customer}</b> [${origItem.displaySize || Number(origItem.size).toFixed(2)}]`;
-                    if (used > 1) text += ` x${used}`;
-                    
-                    // RULE: Feature explicitly showing extra asked qty of existing size
-                    if (extra > 0) text += ` <span style="color:var(--amber);">(Ask +${extra} extra)</span>`;
-                    printNames.push(text);
-                });
-                
-                let namesStr = printNames.join(' &nbsp;,&nbsp; ');
-                let comboStrHtml = currentCombo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ');
-                
-                let gsm = currentCombo[0].gsm;
-                let bf = currentCombo[0].bf;
-                let dia = currentCombo[0].dia;
-
-                // RULE: Completely removed the word "Sets" from output
-                let reelText = `(${sets} reel${sets > 1 ? 's' : ''})`;
-                let mainNeedStr = "";
-                let fillerStr = "";
-
-                if (gapMax >= 0 && gapMin <= 0) {
-                    mainNeedStr = "PERFECT DECKLE";
-                } else {
-                    let needStr = gapMin > 0 ? `${gapMin.toFixed(2)} to ${gapMax.toFixed(2)}` : `up to ${gapMax.toFixed(2)}`;
-                    
-                    // RULE: If gap is > 200, strictly ONLY split it.
-                    if (gapMax > 200) {
-                        let fillers = [];
-                        let split2Min = gapMin > 0 ? gapMin / 2 : 0;
-                        fillers.push(`<b>${split2Min.toFixed(2)} to ${(gapMax/2).toFixed(2)}</b> (${sets * 2} reels)`);
-                        
-                        if (gapMax > 180) { // Keep standard split logic bounds
-                            let split3Min = gapMin > 0 ? gapMin / 3 : 0;
-                            fillers.push(`<b>${split3Min.toFixed(2)} to ${(gapMax/3).toFixed(2)}</b> (${sets * 3} reels)`);
-                        }
-                        if (gapMax > 240) {
-                            let split4Min = gapMin > 0 ? gapMin / 4 : 0;
-                            fillers.push(`<b>${split4Min.toFixed(2)} to ${(gapMax/4).toFixed(2)}</b> (${sets * 4} reels)`);
-                        }
-                        mainNeedStr = `Need split sizes: ${fillers.join(' &nbsp;OR&nbsp; ')}`;
-                    } 
-                    // RULE: If gap is between 125 and 200, show raw gap AND split options.
-                    else if (gapMax > 125) {
-                        mainNeedStr = `Need ${needStr} ${reelText}`;
-                        let fillers = [];
-                        let split2Min = gapMin > 0 ? gapMin / 2 : 0;
-                        fillers.push(`<b>${split2Min.toFixed(2)} to ${(gapMax/2).toFixed(2)}</b> (${sets * 2} reels)`);
-                        
-                        if (gapMax > 180) {
-                            let split3Min = gapMin > 0 ? gapMin / 3 : 0;
-                            fillers.push(`<b>${split3Min.toFixed(2)} to ${(gapMax/3).toFixed(2)}</b> (${sets * 3} reels)`);
-                        }
-                        fillerStr = `<div style="font-size:12px; color:var(--sub); margin-top:4px;">↳ OR try split sizes: ${fillers.join(' &nbsp;|&nbsp; ')}</div>`;
-                    } 
-                    // RULE: If gap is < 125, strictly DO NOT split it. Just show raw gap.
-                    else {
-                        mainNeedStr = `Need ${needStr} ${reelText}`;
-                    }
-                }
-
-                // SCORING: Prioritize non-hypothetical combinations that eat up the most current size.
-                // Minor penalty for extra hypothetical reels ensures native matches rank higher.
-                let baseScore = (sets * currentSize) + (currentCombo.length * 10);
-                let finalScore = baseScore - (extraReelsCount * 20);
-
-                let html = `<div class="suggestion-item">
-                    <div style="margin-bottom:4px;"><span style="font-size:11px; color:var(--sub);">GSM ${gsm} | BF ${bf} | Dia ${dia}</span> &nbsp;•&nbsp; <span style="font-size:12px; color:var(--text);">${namesStr}</span></div>
-                    <span style="color:var(--accent); font-family:var(--mono); font-size:14px;">${comboStrHtml}</span> + <b style="color:var(--red);">${mainNeedStr}</b>
-                    ${fillerStr}
-                </div>`;
-
-                suggestions.push({
-                    score: finalScore, 
-                    html: html,
-                    comboKey: currentCombo.map(c => c.id).sort().join('_') // deduplication key
-                });
-              }
+          if (available < required) {
+            let deficit = required - available;
+            missingReels += deficit;
+            deficitDetails.push(`+${deficit} reel(s) of <b>${itemObj.customer} [${itemObj.displaySize}]</b>`);
           }
+        });
+
+        // STRICT LOGIC FILTER: Only recommend if it requires zero or at most 2 missing reels (highly actionable)
+        if (missingReels <= 2) {
+          let comboStr = combo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ');
+          let customerSummary = combo.map(c => `<b>${c.customer}</b> [${c.displaySize}]`).join(', ');
+          let gsm = combo[0].gsm;
+          let dia = combo[0].dia;
+
+          let recommendationText = "";
+          if (gapMin <= 0 && gapMax >= 0) {
+            recommendationText = `<b style="color:var(--green);">Perfect Deckle Match (0 waste gap)</b>`;
+          } else {
+            let needRange = gapMin > 0 ? `${gapMin.toFixed(1)} to ${gapMax.toFixed(1)} mm` : `up to ${gapMax.toFixed(1)} mm`;
+            recommendationText = `Add filler size of <b style="color:var(--red);">${needRange}</b>`;
+          }
+
+          let stockStatusHtml = "";
+          if (missingReels === 0) {
+            stockStatusHtml = `<span style="color:var(--green); font-size:12px;">✓ Fully actionable using existing unmatched stock (${maxSets} set(s) ready))</span>`;
+          } else {
+            stockStatusHtml = `<span style="color:var(--amber); font-size:12px;">⚡ Actionable by adding: ${deficitDetails.join(', ')}</span>`;
+          }
+
+          let score = totalSize - (missingReels * 50); // Higher deckle utilization with fewer missing parts ranks best
+
+          rawSuggestions.push({
+            score: score,
+            html: `<div class="suggestion-item">
+              <div style="margin-bottom:4px; font-size:11px; color:var(--sub);">GSM ${gsm} | Dia ${dia} | Customers: ${customerSizeSummary = customerSummary}</div>
+              <div style="font-family:var(--mono); font-size:14px; color:var(--accent); margin-bottom:4px;">${comboStr} = ${totalSize.toFixed(1)} mm</div>
+              <div style="margin-bottom:4px;">↳ ${recommendationText}</div>
+              <div>${stockStatusHtml}</div>
+            </div>`,
+            key: combo.map(c => c.id).sort().join('_')
+          });
         }
       }
+    }
 
-      // Allow deep combinations to find best gaps
-      if (currentCombo.length >= 7) return;
+    // Recursive search across unmatched stock to build combinations of 2 to 5 reels
+    function buildCombos(startIndex, currentCombo, currentSize) {
+      if (currentCombo.length >= 2) {
+        evaluateCombination([...currentCombo], currentSize);
+      }
+      if (currentCombo.length >= 5 || currentSize >= rule.max) return;
 
       for (let i = startIndex; i < items.length; i++) {
         let item = items[i];
         let newSize = currentSize + item.size;
-        if (newSize > rule.max) continue;
-
-        let countUsed = usedCounts[item.id] || 0;
-        
-        // RULE: Limit to max 4 extra hypothetical reels per item to avoid infinite calculation loops
-        if (countUsed >= item.reel + 4) continue; 
+        if (newSize > rule.max + 20) continue; // Don't look at sizes way beyond max deckle
 
         currentCombo.push(item);
-        usedCounts[item.id] = countUsed + 1;
-
-        search(i, currentCombo, newSize, usedCounts);
-
+        buildCombos(i + 1, currentCombo, newSize); // i + 1 ensures unique distinct reels configuration
         currentCombo.pop();
-        usedCounts[item.id] = countUsed;
       }
     }
 
     for (let i = 0; i < items.length; i++) {
-      let used = {};
-      used[items[i].id] = 1;
-      search(i, [items[i]], items[i].size, used);
+      buildCombos(i + 1, [items[i]], items[i].size);
+    }
+
+  });
+
+  // Deduplicate and select top 5 highest-quality logical recommendations
+  let uniqueMap = new Map();
+  rawSuggestions.forEach(s => {
+    if (!uniqueMap.has(s.key) || uniqueMap.get(s.key).score < s.score) {
+      uniqueMap.set(s.key, s);
     }
   });
 
-  // Deduplicate identical combinations to keep the list clean
-  let uniqueMap = new Map();
-  suggestions.forEach(s => {
-      if (!uniqueMap.has(s.comboKey) || uniqueMap.get(s.comboKey).score < s.score) {
-          uniqueMap.set(s.comboKey, s);
-      }
-  });
-
-  // Sort by highest impact score and take top 15 suggestions
-  let finalSuggestions = Array.from(uniqueMap.values())
+  let sortedSuggestions = Array.from(uniqueMap.values())
     .sort((a, b) => b.score - a.score)
-    .slice(0, 15)
+    .slice(0, 5)
     .map(s => s.html);
 
-  if (finalSuggestions.length > 0) {
-    list.innerHTML = finalSuggestions.join('');
+  if (sortedSuggestions.length > 0) {
+    list.innerHTML = sortedSuggestions.join('');
     board.style.display = 'block';
   } else {
     board.style.display = 'none';
@@ -1667,7 +1601,6 @@ function renderTable() {
   empty.style.display = 'none';
   table.style.display = 'table';
   
-  // Dynamic Action Block Logic
   if (viewMode === 'data') {
       statsBar.style.display = 'none';
       dataForm.style.display = 'block';
@@ -1785,7 +1718,6 @@ function renderTable() {
           return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
         }).join('');
         
-        // DISPLAY UPDATE: Automatically find and show the highest BF in the matched combination
         let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
         gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${maxBfInCombo}</div>`;
       }
@@ -1811,7 +1743,6 @@ function renderTable() {
       </tr>`;
     }).join('');
     
-    // Call the suggestion engine update when rendering the match/unmatched view
     updateSuggestionBoard();
   }
 }
@@ -1849,16 +1780,14 @@ function exportPDF() {
                   });
                   let uniqueItems = Object.values(groupedCombo);
                   
-                  // Construct clean multi-line string for PDF cells
                   custStr = uniqueItems.map(c => `${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${c.count * r.reel})`).join('\n');
                   sizeStr = r.combo_str ? `${r.combo_str}\nTotal: ${Number(r._size).toFixed(2)}` : `${Number(r._size).toFixed(2)}`;
                   
-                  // PDF Export also reflects the highest BF in the combination
                   let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
                   gsmBfStr = `${r.gsm} / ${maxBfInCombo}`;
               }
               
-              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)];
+              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)]);
           });
       }
 
@@ -1998,7 +1927,7 @@ function removeFile(fname) {
     if (viewMode === 'data') showDataPage();
     else runMatch();
     
-    openFileModal(); // Refresh the list
+    openFileModal(); 
     saveAppState();
 }
 
@@ -2015,7 +1944,7 @@ function toast(msg, isErr = false) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
-// ── Init ───────────────────────────────────────────────────────────────────
+// ── Init ────────────────────────────────────────────────Ø──────────────────
 refreshSelect();
 restoreAppState();
 </script>
