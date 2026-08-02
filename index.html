@@ -1234,6 +1234,7 @@ function runMatch() {
 
           let newMinBf = Math.min(minBf, item.bf);
           let newMaxBf = Math.max(maxBf, item.bf);
+          // STRICT BF VARIANCE LIMIT: Max spread of 2 BF across any combination
           if (newMaxBf - newMinBf > 2) continue;
 
           currentCombo.push(item);
