@@ -1101,7 +1101,6 @@ function showDataPage() {
   saveAppState();
 }
 
-// ── MATCHING ENGINE: Prioritizes combining checked rows into full sets ──
 function runMatch() {
   let activeRows = allRows.filter(r => r._selected !== false);
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
@@ -1134,7 +1133,6 @@ function runMatch() {
           let itemCounts = {};
           currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
           
-          // Calculates sets executable across selected items regardless of leftover reels
           let sets = Math.min(...Object.keys(itemCounts).map(id => {
             let origItem = available.find(a => a.id == id);
             return Math.floor(origItem.reel / itemCounts[id]);
@@ -1349,7 +1347,7 @@ function updateSuggestionBoard() {
         let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
         let gap = rule.min - subTotal;
 
-        // ONLY suggest combinations where needed filler size is 65 cm or more
+        // STRICT THRESHOLD RULE: Only accept if the needed filler size is >= 65 cm
         if (gap >= 65 && gap < minGap) {
           minGap = gap;
           bestMatch = sub;
@@ -1573,7 +1571,7 @@ function renderTable() {
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Sizes & Deckle <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('reel')">Sets <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">Reels <span class="sort-arrow">↕</span></th>
       <th class="center">Dia</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
@@ -1642,7 +1640,7 @@ function exportPDF() {
           body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
-          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets', 'Dia', 'Tons']];
+          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Reels', 'Dia', 'Tons']];
           body = viewRows.map(r => {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm} / ${r.bf}`;
