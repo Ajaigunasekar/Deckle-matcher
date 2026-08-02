@@ -417,6 +417,9 @@
     let matchedList = [];
     let missingInTally = [];
     let missingInPortal = [];
+    
+    let portalFileName = '';
+    let tallyFileName = '';
 
     // --- 1. FULL GST CSV PARSER WITH TAX TOTALS & IGST/CGST/SGST SUPPORT ---
     function parseCSV(text) {
@@ -459,14 +462,16 @@
       return rows;
     }
 
-    // --- 2. FILE UPLOAD LISTENERS ---
+    // --- 2. FILE UPLOAD LISTENERS (INSTANT AUTO-SAVE ON UPLOAD) ---
     document.getElementById('portalFile').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (file) {
+        portalFileName = file.name;
         document.getElementById('portalStatus').innerText = `Loaded: ${file.name}`;
         const reader = new FileReader();
         reader.onload = function(event) {
           portalData = parseCSV(event.target.result);
+          saveToLocalMemory(); // <- Save immediately when file is selected!
         };
         reader.readAsText(file);
       }
@@ -475,10 +480,12 @@
     document.getElementById('tallyFile').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (file) {
+        tallyFileName = file.name;
         document.getElementById('tallyStatus').innerText = `Loaded: ${file.name}`;
         const reader = new FileReader();
         reader.onload = function(event) {
           tallyData = parseCSV(event.target.result);
+          saveToLocalMemory(); // <- Save immediately when file is selected!
         };
         reader.readAsText(file);
       }
@@ -544,7 +551,7 @@
 
       renderTables();
       updateSummary();
-      saveToLocalMemory();
+      saveToLocalMemory(); // <- Save immediately after match completes!
     }
 
     // --- 4. RENDER UI TABLE ---
@@ -622,26 +629,29 @@
         if (missingInTally.length > 0) downloadCSVFile(generateCSVString(missingInTally), 'Deckle_Missing_In_Tally.csv');
         if (missingInPortal.length > 0) downloadCSVFile(generateCSVString(missingInPortal), 'Deckle_Missing_In_Portal.csv');
       }
+      saveToLocalMemory(); // <- Save state after exporting too!
     }
 
-    // --- 7. PERMANENT DATA STORAGE ---
+    // --- 7. BULLETPROOF PERMANENT DATA STORAGE ---
     function saveToLocalMemory() {
       const appData = {
         tallyData: tallyData,
         portalData: portalData,
         matchedList: matchedList,
         missingInTally: missingInTally,
-        missingInPortal: missingInPortal
+        missingInPortal: missingInPortal,
+        portalFileName: portalFileName,
+        tallyFileName: tallyFileName
       };
       try {
-        localStorage.setItem('deckleSavedMatchData', JSON.stringify(appData));
+        localStorage.setItem('deckleSavedMatchData_v2', JSON.stringify(appData));
       } catch (e) {
         console.error("Storage error", e);
       }
     }
 
     function loadFromLocalMemory() {
-      const savedJSON = localStorage.getItem('deckleSavedMatchData');
+      const savedJSON = localStorage.getItem('deckleSavedMatchData_v2');
       if (savedJSON) {
         try {
           const appData = JSON.parse(savedJSON);
@@ -650,12 +660,26 @@
           matchedList = appData.matchedList || [];
           missingInTally = appData.missingInTally || [];
           missingInPortal = appData.missingInPortal || [];
+          portalFileName = appData.portalFileName || '';
+          tallyFileName = appData.tallyFileName || '';
           
+          // Restore file status labels even if match hasn't been run yet
+          if (portalFileName) {
+            document.getElementById('portalStatus').innerText = `Loaded (Saved): ${portalFileName}`;
+          } else if (portalData.length > 0) {
+            document.getElementById('portalStatus').innerText = `Saved from previous session (${portalData.length} records)`;
+          }
+          
+          if (tallyFileName) {
+            document.getElementById('tallyStatus').innerText = `Loaded (Saved): ${tallyFileName}`;
+          } else if (tallyData.length > 0) {
+            document.getElementById('tallyStatus').innerText = `Saved from previous session (${tallyData.length} records)`;
+          }
+
+          // Restore tables and numbers if match was previously run
           if (matchedList.length > 0 || missingInTally.length > 0 || missingInPortal.length > 0) {
             renderTables();
             updateSummary();
-            document.getElementById('portalStatus').innerText = portalData.length > 0 ? `Saved from previous session (${portalData.length} records)` : 'No file selected';
-            document.getElementById('tallyStatus').innerText = tallyData.length > 0 ? `Saved from previous session (${tallyData.length} records)` : 'No file selected';
           }
         } catch (e) {
           console.error("Could not load saved data", e);
@@ -666,12 +690,14 @@
     function clearAllData() {
       const confirmDelete = confirm("Are you sure you want to delete all saved data? You will need to upload CSVs again.");
       if (confirmDelete) {
-        localStorage.removeItem('deckleSavedMatchData');
+        localStorage.removeItem('deckleSavedMatchData_v2');
         tallyData = [];
         portalData = [];
         matchedList = [];
         missingInTally = [];
         missingInPortal = [];
+        portalFileName = '';
+        tallyFileName = '';
         
         renderTables();
         updateSummary();
@@ -685,6 +711,7 @@
       }
     }
 
+    // Automatically load saved data immediately when the app or browser opens
     window.addEventListener('DOMContentLoaded', loadFromLocalMemory);
   </script>
 </body>
