@@ -367,7 +367,6 @@
   }
   tbody tr:active { background: var(--card); }
 
-  /* Protect data rows from text-selection on long press */
   .data-row {
     -webkit-user-select: none;
     -ms-user-select: none;
@@ -383,10 +382,8 @@
   td.size-val { font-family: var(--mono); font-size: 15px; font-weight: bold; }
   td.center { text-align: center; }
 
-  /* Row highlight overrides */
   tr.row-nomatch td.size-val { color: var(--red); }
   
-  /* Inline Edit Input */
   .edit-input {
     width: 100%;
     max-width: 80px;
@@ -404,7 +401,6 @@
     border-color: var(--green);
   }
 
-  /* ── Empty / placeholder ── */
   .empty {
     display: flex;
     flex-direction: column;
@@ -419,7 +415,6 @@
   .empty-title { font-size: 16px; color: var(--sub); }
   .empty-sub { font-size: 13px; color: var(--border); max-width: 260px; }
 
-  /* ── Modal / Forms ── */
   .modal-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.7);
@@ -482,7 +477,6 @@
   .btn-sm.danger:active { background: rgba(224,92,106,0.2); border-color: var(--red); }
   .btn-sm:active { background: var(--border); color: var(--text); }
 
-  /* Input fields */
   .add-form { display: flex; flex-direction: column; gap: 12px; }
   .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .field label {
@@ -516,7 +510,6 @@
     margin-bottom: 12px;
   }
 
-  /* ── Toast ── */
   .toast {
     position: fixed;
     bottom: 30px;
@@ -535,7 +528,6 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── Responsive: phone / portrait iPad ── */
   @media (max-width: 768px) {
     .main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; height: auto; }
     .main.sidebar-hidden .sidebar {
@@ -562,7 +554,6 @@
 </head>
 <body>
 
-<!-- Header -->
 <div class="header">
   <div class="header-left">
     <button class="btn-icon sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -574,23 +565,19 @@
   <button class="btn-icon" onclick="openModal()">⚙ Manage Deckles</button>
 </div>
 
-<!-- Main -->
 <div class="main">
 
-  <!-- Sidebar -->
   <aside class="sidebar">
 
     <div>
       <div class="sec-label">1 · Upload Excel File</div>
       
-      <!-- Upload Zone (Hidden after first upload) -->
       <div class="upload-zone" id="uploadZone">
         <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" onchange="handleFile(this, false)">
         <div class="upload-icon">📂</div>
         <div class="upload-text">Tap to <b>Browse</b><br>Excel or CSV file</div>
       </div>
       
-      <!-- Loaded State & Append More Data Button -->
       <div id="fileLoadedBlock" style="display:none;" class="file-loaded-block">
         <div class="file-badge show">
           <span>✓</span>
@@ -628,7 +615,6 @@
 
   </aside>
 
-  <!-- Stats bar -->
   <div class="stats-bar" id="statsBar" style="display:none;">
     <div class="stat">
       <div class="stat-dot" style="background:var(--accent)"></div>
@@ -664,7 +650,6 @@
     <div class="deckle-info" id="deckleInfo"></div>
   </div>
 
-  <!-- Table -->
   <div class="table-wrap" id="tableWrap">
     <div class="empty" id="emptyState">
       <div class="empty-icon">📂</div>
@@ -672,7 +657,6 @@
       <div class="empty-sub">Upload your Excel file or click 'Manage Data' to add manual orders.</div>
     </div>
     
-    <!-- Action buttons block for Sub-pages -->
     <div id="actionBlock" style="display:none; margin-bottom: 16px;">
       <button id="btnBackToMatches" class="btn-secondary" onclick="runMatch()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold;">
         ⬅ Back to Matches
@@ -685,7 +669,6 @@
       </button>
     </div>
     
-    <!-- Manual Data Entry Form -->
     <div id="dataEntryForm" style="display:none; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px;">
         <div style="font-family:var(--mono); font-size:12px; color:var(--accent); margin-bottom:12px; font-weight:bold;">＋ ADD NEW ORDER MANUALLY</div>
         <div class="data-form-grid field">
@@ -699,23 +682,19 @@
         <button class="btn-primary" onclick="addManualOrder()" style="min-height: 40px; padding: 10px; font-size: 12px;">Add Order</button>
     </div>
     
-    <!-- Suggestion Board -->
     <div id="suggestionBoard" class="suggestion-board" style="display:none;">
-      <div class="suggestion-title">💡 TARGETED DECKLE GAP FIXER (UNMATCHED REELS)</div>
+      <div class="suggestion-title">💡 PRECISE OPTIMIZATION SUGGESTIONS (UNMATCHED REELS)</div>
       <div id="suggestionList"></div>
     </div>
 
     <table id="resultsTable" style="display:none;">
-      <thead id="tableHead">
-        <!-- Will be dynamically managed via JS -->
-      </thead>
+      <thead id="tableHead"></thead>
       <tbody id="tableBody"></tbody>
     </table>
   </div>
 
 </div>
 
-<!-- Manage Deckles Modal -->
 <div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -747,7 +726,6 @@
   </div>
 </div>
 
-<!-- Uploaded Files Modal -->
 <div class="modal-overlay" id="fileModalOverlay" onclick="handleFileOverlayClick(event)">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -759,43 +737,28 @@
   </div>
 </div>
 
-<!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<!-- Libraries for Excel & PDF Export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
 <script>
-// ── Universal Size Parser (CM / Inches) ────────────────────────────────────
 function parseSizeInput(valStr) {
     if (!valStr) return { size: 0, displaySize: '0' };
     let str = String(valStr).toLowerCase().trim();
-    
-    let isInch = str.includes('"') || 
-                 str.includes('”') || 
-                 str.includes('“') || 
-                 str.includes('″') || 
-                 str.includes("'") || 
-                 str.includes('’') || 
-                 str.includes('‘') || 
-                 str.includes('in');
-                 
+    let isInch = str.includes('"') || str.includes('”') || str.includes('“') || str.includes('″') || str.includes("'") || str.includes('’') || str.includes('‘') || str.includes('in');
     let num = parseFloat(str.replace(/[^\d.-]/g, '')) || 0;
-    
     if (isInch && num > 0) {
         return { size: num * 2.54, displaySize: num + '"' };
     }
     return { size: num, displaySize: num > 0 ? num.toFixed(2) : '0' };
 }
 
-// ── Sidebar Toggle Logic ───────────────────────────────────────────────────
 function toggleSidebar() {
   document.querySelector('.main').classList.toggle('sidebar-hidden');
 }
 
-// ── State ──────────────────────────────────────────────────────────────────
 let rules = JSON.parse(localStorage.getItem('deckleRules') || 'null') || [
   { name: "Deckle 422-435", min: 422, max: 435 }
 ];
@@ -809,7 +772,6 @@ let sortAsc   = true;
 let viewMode  = 'match'; 
 let isEditingData = false;
 
-// ── Persist Rules & Full Application State ────────────────────────────────
 function saveRules() {
   localStorage.setItem('deckleRules', JSON.stringify(rules));
 }
@@ -855,8 +817,7 @@ function restoreAppState() {
       const idx  = parseInt(document.getElementById('deckleSelect').value) || 0;
       const rule = rules[idx];
       if (rule) {
-        document.getElementById('deckleInfo').innerHTML =
-          `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
+        document.getElementById('deckleInfo').innerHTML = `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
         document.getElementById('statsBar').style.display = 'flex';
       }
       setFilter(currentFilter);
@@ -867,18 +828,14 @@ function restoreAppState() {
   return true;
 }
 
-// ── Deckle select ──────────────────────────────────────────────────────────
 function refreshSelect() {
   const sel = document.getElementById('deckleSelect');
   const cur = sel.value;
-  sel.innerHTML = rules.map((r, i) =>
-    `<option value="${i}">${r.name}  (${r.min}–${r.max})</option>`
-  ).join('');
+  sel.innerHTML = rules.map((r, i) => `<option value="${i}">${r.name}  (${r.min}–${r.max})</option>`).join('');
   const idx = rules.findIndex((r, i) => `${i}` === cur);
   if (idx >= 0) sel.value = idx;
 }
 
-// ── Update File Badge UI ───────────────────────────────────────────────────
 function updateFileBadge() {
     if (loadedFiles.length === 0) {
         clearAll();
@@ -888,7 +845,6 @@ function updateFileBadge() {
     document.getElementById('fileName').innerHTML = `${fText} <span class="info-icon" onclick="openFileModal()">i</span>`;
 }
 
-// ── File upload ────────────────────────────────────────────────────────────
 function handleFile(input, isAppend) {
   const file = input.files[0];
   if (!file) return;
@@ -897,7 +853,6 @@ function handleFile(input, isAppend) {
   reader.onload = (e) => {
     try {
       let rows = [];
-
       if (file.name.endsWith('.csv')) {
         const text = new TextDecoder().decode(e.target.result);
         const lines = text.trim().split('\n');
@@ -921,9 +876,8 @@ function handleFile(input, isAppend) {
           if (!loadedFiles.includes(currentFileName)) loadedFiles.push(currentFileName);
       }
 
-      let newRows = rows.map((r, index) => {
+      let newRows = rows.map((r) => {
         let rowStrKeys = Object.keys(r);
-        
         let getVal = (keywords) => {
           let key = rowStrKeys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
           return key ? r[key] : null;
@@ -946,20 +900,16 @@ function handleFile(input, isAppend) {
         };
 
         let customer = getVal(['customer', 'name', 'client']) || 'Unknown';
-        
         let gsmValRaw = getVal(['gsm/bf', 'gsmbf', 'gsm']);
         let bfValRaw = getVal(['gsm/bf', 'gsmbf', 'bf', 'b.f']);
-        
         if (!bfValRaw && gsmValRaw && String(gsmValRaw).includes('/')) {
             bfValRaw = gsmValRaw;
         }
         
         let gsm = parseField(gsmValRaw, true);
         let bf = parseField(bfValRaw, false);
-        
         let sizeRaw = String(getVal(['size', 'deckle', 'mm', 'cm', 'inch']) || '0');
         let parsed = parseSizeInput(sizeRaw);
-        
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let dia = getVal(['dia', 'shade']) || '-';
         
@@ -980,11 +930,9 @@ function handleFile(input, isAppend) {
       document.getElementById('uploadZone').style.display = 'none';
       document.getElementById('fileLoadedBlock').style.display = 'flex';
       updateFileBadge();
-      
       input.value = ''; 
       showDataPage();
       saveAppState();
-      
     } catch(err) {
       toast('Error reading file: ' + err.message, true);
     }
@@ -992,14 +940,11 @@ function handleFile(input, isAppend) {
   reader.readAsArrayBuffer(file);
 }
 
-// ── Selection Controls ─────────────────────────────────────────────────────
 function toggleSelection(id, isChecked) {
     let row = allRows.find(r => r.id === id);
     if (row) row._selected = isChecked;
-    
     let vRow = viewRows.find(r => r.id === id);
     if (vRow) vRow._selected = isChecked;
-    
     renderTable(); 
     saveAppState();
 }
@@ -1011,7 +956,6 @@ function toggleAllSelection(isChecked) {
     saveAppState();
 }
 
-// ── Inline Edit Data Logic ─────────────────────────────────────────────────
 function toggleEditMode() {
     isEditingData = !isEditingData;
     if (!isEditingData) {
@@ -1038,7 +982,6 @@ function updateData(id, field, value) {
             row[field] = parseFloat(value) || 0;
             if(vRow) vRow[field] = parseFloat(value) || 0;
         }
-        
         row.tons = (row.size / 2.54 * 12.2 * row.reel) / 1000;
         if(vRow) vRow.tons = row.tons;
     }
@@ -1054,10 +997,8 @@ function updateData(id, field, value) {
     saveAppState();
 }
 
-// ── Long-Press Delete Logic ────────────────────────────────────────────────
 let pressTimer;
 let isPressing = false;
-
 function startPress(id) {
   isPressing = true;
   pressTimer = setTimeout(() => {
@@ -1074,7 +1015,6 @@ function endPress() {
   clearTimeout(pressTimer);
 }
 
-// ── Add/Delete Manual Order ────────────────────────────────────────────────
 function addManualOrder() {
   let cust = document.getElementById('addCust').value.trim() || 'Manual';
   let gsm = parseFloat(document.getElementById('addGsm').value) || 0;
@@ -1089,7 +1029,6 @@ function addManualOrder() {
   }
 
   let parsed = parseSizeInput(sizeRaw);
-  
   if (!loadedFiles.includes('Manual Entry')) {
       loadedFiles.push('Manual Entry');
       document.getElementById('uploadZone').style.display = 'none';
@@ -1098,18 +1037,8 @@ function addManualOrder() {
   }
 
   let newId = allRows.length > 0 ? Math.max(...allRows.map(r => r.id)) + 1 : 0;
-  
   allRows.push({
-    id: newId,
-    customer: cust,
-    gsm: gsm,
-    bf: bf,
-    size: parsed.size,
-    displaySize: parsed.displaySize,
-    reel: reel,
-    dia: String(dia),
-    fileName: 'Manual Entry',
-    _selected: true
+    id: newId, customer: cust, gsm: gsm, bf: bf, size: parsed.size, displaySize: parsed.displaySize, reel: reel, dia: String(dia), fileName: 'Manual Entry', _selected: true
   });
 
   document.getElementById('addCust').value = '';
@@ -1131,30 +1060,20 @@ function deleteOrder(id) {
   saveAppState();
 }
 
-// ── Show Data View ─────────────────────────────────────────────────────────
 function showDataPage() {
   viewMode = 'data';
-  
   document.querySelectorAll('.pills .pill').forEach(p => p.className = 'pill');
-  
-  viewRows = [...allRows].map(r => ({
-      ...r,
-      tons: (r.size / 2.54 * 12.2 * r.reel) / 1000
-  }));
-  
+  viewRows = [...allRows].map(r => ({ ...r, tons: (r.size / 2.54 * 12.2 * r.reel) / 1000 }));
   viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
   renderTable();
-  
   if(window.innerWidth > 768) {
     document.querySelector('.main').classList.remove('sidebar-hidden');
   }
   saveAppState();
 }
 
-// ── Run match (Inventory Deduction + Strict Dia Matching + Up to 7 Reels) ─
 function runMatch() {
   let activeRows = allRows.filter(r => r._selected !== false);
-  
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
   const idx  = parseInt(document.getElementById('deckleSelect').value);
   const rule = rules[idx];
@@ -1172,7 +1091,6 @@ function runMatch() {
 
   Object.keys(groups).forEach(key => {
     let items = groups[key];
-
     let keepMatching = true;
     while(keepMatching) {
       let available = items.filter(i => i.reel > 0);
@@ -1183,10 +1101,8 @@ function runMatch() {
 
       function search(startIndex, currentCombo, currentSize, minBf, maxBf, usedCounts) {
         if (currentSize >= rule.min && currentSize <= rule.max) {
-          
           let itemCounts = {};
           currentCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
-          
           let sets = Math.min(...Object.keys(itemCounts).map(id => {
             let origItem = available.find(a => a.id == id);
             return Math.floor(origItem.reel / itemCounts[id]);
@@ -1194,15 +1110,10 @@ function runMatch() {
 
           if (sets > 0) {
             let reelsProcessed = sets * currentCombo.length;
-            
             let ageScore = 0;
-            currentCombo.forEach(c => {
-                ageScore += (10000000 - c.id); 
-            });
+            currentCombo.forEach(c => { ageScore += (10000000 - c.id); });
             let totalAgeScore = ageScore * sets;
-            
             let score = (reelsProcessed * 10000000000) + (totalAgeScore * 1000) + currentSize;
-            
             if (score > bestScore) {
               bestScore = score;
               bestCombo = currentCombo.map(c => ({...c}));
@@ -1216,10 +1127,8 @@ function runMatch() {
           let item = available[i];
           let newSize = currentSize + item.size;
           if (newSize > rule.max) continue;
-
           let countUsed = usedCounts[item.id] || 0;
           if (item.reel < countUsed + 1) continue;
-          
           if (currentCombo.length > 0 && item.dia !== currentCombo[0].dia) continue;
 
           let newMinBf = Math.min(minBf, item.bf);
@@ -1228,9 +1137,7 @@ function runMatch() {
 
           currentCombo.push(item);
           usedCounts[item.id] = countUsed + 1;
-
           search(i, currentCombo, newSize, newMinBf, newMaxBf, usedCounts);
-
           currentCombo.pop();
           usedCounts[item.id] = countUsed;
         }
@@ -1245,7 +1152,6 @@ function runMatch() {
       if (bestCombo) {
         let itemCounts = {};
         bestCombo.forEach(c => { itemCounts[c.id] = (itemCounts[c.id] || 0) + 1; });
-        
         let sets = Math.min(...Object.keys(itemCounts).map(id => {
           let origItem = available.find(a => a.id == id);
           return Math.floor(origItem.reel / itemCounts[id]);
@@ -1279,7 +1185,6 @@ function runMatch() {
 
   let matchedCombos = [...matchRows]; 
   let unMatched = [];
-  
   Object.keys(groups).forEach(key => {
      groups[key].forEach(item => {
         if (item.reel > 0) {
@@ -1296,8 +1201,7 @@ function runMatch() {
 
   matchRows = [...matchedCombos, ...unMatched];
 
-  document.getElementById('deckleInfo').innerHTML  =
-    `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
+  document.getElementById('deckleInfo').innerHTML = `<span>${rule.name}</span>  ${rule.min}–${rule.max}`;
   document.getElementById('statsBar').style.display = 'flex';
 
   currentFilter = 'match';
@@ -1305,14 +1209,12 @@ function runMatch() {
   saveAppState();
 }
 
-// ── Manual Matched Data Clear ──────────────────────────────────────────────
 function clearMatchedData() {
   let matchedRows = matchRows.filter(r => r._match);
   if (matchedRows.length === 0) {
     toast('No matched data to clear.', true);
     return;
   }
-  
   if (!confirm("Are you sure you want to remove the matched reels from inventory?")) return;
 
   matchedRows.forEach(mRow => {
@@ -1321,11 +1223,9 @@ function clearMatchedData() {
           if(!groupedCombo[c.id]) groupedCombo[c.id] = 0;
           groupedCombo[c.id] += 1;
       });
-      
       Object.keys(groupedCombo).forEach(idStr => {
           let id = parseInt(idStr);
           let consumedReels = groupedCombo[id] * mRow.reel;
-          
           let target = allRows.find(row => row.id === id);
           if (target) {
               target.reel -= consumedReels;
@@ -1334,9 +1234,7 @@ function clearMatchedData() {
   });
 
   allRows = allRows.filter(row => row.reel > 0);
-  
   toast('✓ Matched Orders Cleared');
-  
   if (viewMode === 'data') {
       showDataPage();
   } else {
@@ -1345,7 +1243,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── Suggestion Engine (Strictly Following Scenarios 1, 2, and 3) ─────────────
+// ── Strict Scenario-Based Suggestion Engine ────────────────────────────────
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1359,7 +1257,6 @@ function updateSuggestionBoard() {
   const rule = rules[idx];
   if (!rule) return;
 
-  // Group unmatched records by GSM and Dia
   let groups = {};
   viewRows.forEach(row => {
     let key = `${row.gsm}_${row.dia}`;
@@ -1370,7 +1267,6 @@ function updateSuggestionBoard() {
   let finalSuggestions = [];
 
   Object.values(groups).forEach(items => {
-    // Collect all individual unmatched reels for this GSM/Dia group
     let unmatchedReelsList = [];
     items.forEach(item => {
       for (let r = 0; r < item.reel; r++) {
@@ -1381,8 +1277,7 @@ function updateSuggestionBoard() {
     let count = unmatchedReelsList.length;
 
     if (count >= 3) {
-      // SCENARIO 1: 3 or more unmatched sizes available -> Sum them up and find remainder size to reach deckle range [rule.min to rule.max]
-      // Let's take the first 3 or 4 items that have close BF (max diff <= 2)
+      // SCENARIO 1: 3 or more sizes -> 1 Best Suggestion summing them up against deckle range
       for (let i = 0; i < unmatchedReelsList.length; i++) {
         for (let j = i + 1; j < unmatchedReelsList.length; j++) {
           for (let k = j + 1; k < unmatchedReelsList.length; k++) {
@@ -1393,17 +1288,15 @@ function updateSuggestionBoard() {
               let minNeed = rule.min - subTotal;
               let maxNeed = rule.max - subTotal;
 
-              if (maxNeed >= 10 && minNeed <= 250) {
+              if (maxNeed >= 5 && minNeed <= 250) {
                 let comboStr = subCombo.map(c => c.displaySize).join(' + ');
                 let needStr = minNeed > 0 ? `${minNeed.toFixed(1)} to ${maxNeed.toFixed(1)} mm` : `up to ${maxNeed.toFixed(1)} mm`;
                 
                 finalSuggestions.push(`<div class="suggestion-item">
-                  <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${subCombo[0].gsm} | Dia ${subCombo[0].dia} (Scenario 1 Match)</div>
+                  <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${subCombo[0].gsm} | Dia ${subCombo[0].dia} (Scenario 1 Optimal Suggestion)</div>
                   <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${subTotal.toFixed(1)} mm<br>
-                  ↳ Target Deckle range [${rule.min}-${rule.max}]. Add missing size: <b style="color:var(--red);">${needStr}</b>
+                  ↳ Target Deckle [${rule.min}-${rule.max}]. Add missing size: <b style="color:var(--red);">${needStr}</b>
                 </div>`);
-                
-                // Only give one best suggestion for scenario 1
                 break;
               }
             }
@@ -1414,7 +1307,7 @@ function updateSuggestionBoard() {
       }
     } 
     else if (count === 2) {
-      // SCENARIO 2: Exactly 2 sizes available -> Provide multiple suggestions (Scenario 1 logic + split size option)
+      // SCENARIO 2: Exactly 2 sizes -> Allow multiple precise choices (Single filler + Split size option)
       let r1 = unmatchedReelsList[0];
       let r2 = unmatchedReelsList[1];
       if (Math.abs(r1.bf - r2.bf) <= 2) {
@@ -1422,23 +1315,23 @@ function updateSuggestionBoard() {
         let minNeed = rule.min - subTotal;
         let maxNeed = rule.max - subTotal;
 
-        if (maxNeed >= 10) {
+        if (maxNeed >= 5) {
           let needStr = minNeed > 0 ? `${minNeed.toFixed(1)} to ${maxNeed.toFixed(1)} mm` : `up to ${maxNeed.toFixed(1)} mm`;
           
-          // Suggestion A: Single filler size
+          // Suggestion 1: Single size filler
           finalSuggestions.push(`<div class="suggestion-item">
-            <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${r1.gsm} | Dia ${r1.dia} (Scenario 2 - Option A: Single Size Filler)</div>
+            <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${r1.gsm} | Dia ${r1.dia} (Scenario 2 - Choice 1: Single Size Filler)</div>
             <span style="color:var(--accent); font-family:var(--mono);">${r1.displaySize} + ${r2.displaySize}</span> = ${subTotal.toFixed(1)} mm<br>
             ↳ Add single size filler: <b style="color:var(--red);">${needStr}</b>
           </div>`);
 
-          // Suggestion B: Split size option (divided by 2)
-          let splitMin = minNeed > 0 ? (minNeed / 2) : 10;
+          // Suggestion 2: Split size option (divided by 2)
+          let splitMin = minNeed > 0 ? (minNeed / 2) : 5;
           let splitMax = maxNeed / 2;
           let splitNeedStr = `${splitMin.toFixed(1)} to ${splitMax.toFixed(1)} mm (x2 reels)`;
 
           finalSuggestions.push(`<div class="suggestion-item">
-            <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${r1.gsm} | Dia ${r1.dia} (Scenario 2 - Option B: Split Size Option)</div>
+            <div style="font-size:11px; color:var(--sub); margin-bottom:4px;">GSM ${r1.gsm} | Dia ${r1.dia} (Scenario 2 - Choice 2: Split Size Option)</div>
             <span style="color:var(--accent); font-family:var(--mono);">${r1.displaySize} + ${r2.displaySize}</span> = ${subTotal.toFixed(1)} mm<br>
             ↳ Add split sizes (divided by 2): <b style="color:var(--red);">${splitNeedStr}</b>
           </div>`);
@@ -1446,7 +1339,7 @@ function updateSuggestionBoard() {
       }
     } 
     else if (count === 1) {
-      // SCENARIO 3: Only 1 size remaining -> Ask size and reels numbers based on existing size
+      // SCENARIO 3: Only 1 size remaining -> Ask size and reel numbers based on existing size
       let r1 = unmatchedReelsList[0];
       let minNeed = rule.min - r1.size;
       let maxNeed = rule.max - r1.size;
@@ -1468,10 +1361,8 @@ function updateSuggestionBoard() {
   }
 }
 
-// ── Filter ─────────────────────────────────────────────────────────────────
 function setFilter(f) {
   if(viewMode === 'data') return;
-  
   viewMode = 'match';
   currentFilter = f;
   document.querySelectorAll('.pill').forEach(p => {
@@ -1499,11 +1390,9 @@ function applyFilter(f) {
   } else {
     viewRows.sort((a, b) => b._size - a._size);
   }
-  
   renderTable();
 }
 
-// ── Sort ───────────────────────────────────────────────────────────────────
 function sortTable(key) {
   if (sortKey === key) sortAsc = !sortAsc;
   else { sortKey = key; sortAsc = true; }
@@ -1527,21 +1416,14 @@ function sortTable(key) {
   renderTable();
 }
 
-// ── Export Unmatched Excel ─────────────────────────────────────────────────
 function exportUnmatchedExcel() {
   if (!viewRows.length || currentFilter !== 'nomatch') return;
-  
   try {
       let exportData = viewRows.map(r => ({
-          "Customer": r.customer,
-          "GSM": r.gsm,
-          "BF": r.bf,
+          "Customer": r.customer, "GSM": r.gsm, "BF": r.bf,
           "Size": r.displaySize || Number(r.size).toFixed(2),
-          "Reels": r.reel,
-          "Dia": r.dia || '-',
-          "Tons": Number(r.tons.toFixed(3))
+          "Reels": r.reel, "Dia": r.dia || '-', "Tons": Number(r.tons.toFixed(3))
       }));
-      
       let ws = XLSX.utils.json_to_sheet(exportData);
       let wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Unmatched Orders");
@@ -1552,7 +1434,6 @@ function exportUnmatchedExcel() {
   }
 }
 
-// ── Render ─────────────────────────────────────────────────────────────────
 function renderTable() {
   const thead = document.getElementById('tableHead');
   const tbody = document.getElementById('tableBody');
@@ -1585,17 +1466,14 @@ function renderTable() {
       btnBack.style.display = matchRows.length > 0 ? 'inline-flex' : 'none';
       btnEdit.style.display = 'inline-flex';
       btnExportCSV.style.display = 'none';
-      
       btnEdit.innerHTML = isEditingData ? '💾 Save' : '✏️ Edit';
       btnEdit.style.background = isEditingData ? 'var(--accent)' : 'transparent';
       btnEdit.style.color = isEditingData ? '#fff' : 'var(--sub)';
-      
       document.getElementById('suggestionBoard').style.display = 'none';
   } else {
       statsBar.style.display = 'flex';
       dataForm.style.display = 'none';
       isEditingData = false;
-      
       if (currentFilter === 'nomatch' && viewRows.length > 0) {
           actionBlock.style.display = 'block';
           btnBack.style.display = 'none';
@@ -1640,11 +1518,9 @@ function renderTable() {
     } else {
         tbody.innerHTML = viewRows.map(r => {
           let custCell = isEditingData ? `<input type="text" class="edit-input" style="width:80px;" value="${r.customer}" onchange="updateData(${r.id}, 'customer', this.value)">` : r.customer;
-          
           let gsmBfCell = isEditingData 
               ? `<input type="number" class="edit-input" style="width:50px; margin-right:4px;" value="${r.gsm}" onchange="updateData(${r.id}, 'gsm', this.value)"> / <input type="number" class="edit-input" style="width:40px; margin-left:4px;" value="${r.bf}" onchange="updateData(${r.id}, 'bf', this.value)">`
               : `${r.gsm} / ${r.bf}`;
-              
           let safeSizeVal = String(r.displaySize || Number(r.size).toFixed(2)).replace(/"/g, '&quot;');
           let sizeCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${safeSizeVal}" onchange="updateData(${r.id}, 'size', this.value)">` : (r.displaySize || Number(r.size).toFixed(2));
           let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:50px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
@@ -1663,7 +1539,6 @@ function renderTable() {
           </tr>`
         }).join('');
     }
-    
   } else {
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
@@ -1675,8 +1550,7 @@ function renderTable() {
     </tr>`;
 
     tbody.innerHTML = viewRows.map(r => {
-      const cls   = r._match ? 'row-match' : 'row-nomatch';
-      
+      const cls = r._match ? 'row-match' : 'row-nomatch';
       let custHtml = `<div style="padding:13px 14px;">${r.customer}</div>`;
       let gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
 
@@ -1689,10 +1563,9 @@ function renderTable() {
           groupedCombo[c.id].count += 1;
         });
         let uniqueItems = Object.values(groupedCombo);
-
         custHtml = uniqueItems.map((c, i) => {
           let totalReelsUsedInCombo = c.count * r.reel;
-          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.displaySize || Number(r.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
+          return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
         }).join('');
         
         let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
@@ -1701,14 +1574,10 @@ function renderTable() {
 
       return `<tr class="${cls}">
         <td class="customer" style="padding:0; vertical-align:top;">
-          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
-            ${custHtml}
-          </div>
+          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">${custHtml}</div>
         </td>
         <td class="center" style="padding:0; vertical-align:middle;">
-          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
-            ${gsmBfHtml}
-          </div>
+          <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">${gsmBfHtml}</div>
         </td>
         <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
           ${r._match && r.combo_str ? `<div style="font-size:14px; color:var(--accent); margin-bottom:8px; font-weight:900; letter-spacing:0.5px; background:rgba(79,142,247,0.1); padding:6px 10px; border-radius:6px; display:inline-block; border: 1px solid rgba(79,142,247,0.3);">${r.combo_str}</div>` : ''}
@@ -1724,14 +1593,11 @@ function renderTable() {
   }
 }
 
-// ── Export PDF ─────────────────────────────────────────────────────────────
 function exportPDF() {
   if (!viewRows.length) { toast('No data to export', true); return; }
-  
   try {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF('landscape');
-      
       let head = [];
       let body = [];
       let title = "";
@@ -1743,12 +1609,10 @@ function exportPDF() {
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
           head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets', 'Dia', 'Tons']];
-          
           body = viewRows.map(r => {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm} / ${r.bf}`;
               let sizeStr = r.displaySize || Number(r._size || r.size).toFixed(2);
-              
               if (r._match && r.comboData) {
                   let groupedCombo = {};
                   r.comboData.forEach(c => {
@@ -1756,30 +1620,22 @@ function exportPDF() {
                     groupedCombo[c.id].count += 1;
                   });
                   let uniqueItems = Object.values(groupedCombo);
-                  
                   custStr = uniqueItems.map(c => `${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${c.count * r.reel})`).join('\n');
                   sizeStr = r.combo_str ? `${r.combo_str}\nTotal: ${Number(r._size).toFixed(2)}` : `${Number(r._size).toFixed(2)}`;
-                  
                   let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
                   gsmBfStr = `${r.gsm} / ${maxBfInCombo}`;
               }
-              
-              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)]);
+              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)];
           });
       }
 
       doc.setFontSize(14);
       doc.text(`Deckle Match - ${title}`, 14, 15);
-      
       doc.autoTable({
-          startY: 20,
-          head: head,
-          body: body,
-          theme: 'grid',
+          startY: 20, head: head, body: body, theme: 'grid',
           headStyles: { fillColor: [79, 142, 247] },
           styles: { fontSize: 10, cellPadding: 4, valign: 'middle' }
       });
-
       doc.save(`Deckle_Match_${title.replace(/\s+/g, '_')}.pdf`);
       toast('✓ PDF Exported Successfully');
   } catch (e) {
@@ -1788,10 +1644,8 @@ function exportPDF() {
   }
 }
 
-// ── Clear All Confirmation ─────────────────────────────────────────────────
 function clearAll() {
   if (!confirm("Are you sure you want to clear all data? This cannot be undone.")) return;
-  
   allRows = matchRows = viewRows = loadedFiles = [];
   viewMode = 'match';
   isEditingData = false;
@@ -1807,13 +1661,11 @@ function clearAll() {
   document.getElementById('emptyState').style.display = 'flex';
   document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
   document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file or click \'Manage Data\' to add manual orders.';
-  
   document.querySelector('.main').classList.remove('sidebar-hidden');
   localStorage.removeItem('deckleAppState');
   toast('Cleared');
 }
 
-// ── Deckle Rules Modal ─────────────────────────────────────────────────────
 function openModal() {
   renderRuleList();
   document.getElementById('modalOverlay').classList.add('show');
@@ -1821,8 +1673,8 @@ function openModal() {
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('show');
   document.getElementById('newName').value = '';
-  document.getElementById('newMin').value  = '';
-  document.getElementById('newMax').value  = '';
+  document.getElementById('newMin').value = '';
+  document.getElementById('newMax').value = '';
 }
 function handleOverlayClick(e) {
   if (e.target === document.getElementById('modalOverlay')) closeModal();
@@ -1855,8 +1707,8 @@ function addRule() {
   refreshSelect();
   renderRuleList();
   document.getElementById('newName').value = '';
-  document.getElementById('newMin').value  = '';
-  document.getElementById('newMax').value  = '';
+  document.getElementById('newMin').value = '';
+  document.getElementById('newMax').value = '';
   toast(`✓ Added "${name}"`);
 }
 
@@ -1870,7 +1722,6 @@ function deleteRule(i) {
   toast(`Deleted "${name}"`);
 }
 
-// ── Uploaded Files Modal ───────────────────────────────────────────────────
 function openFileModal() {
     let html = loadedFiles.map(f => {
         let safeF = f.replace(/'/g, "\\'");
@@ -1881,7 +1732,6 @@ function openFileModal() {
           </div>
         </div>`;
     }).join('');
-    
     document.getElementById('fileList').innerHTML = html || '<div style="color:var(--sub);font-size:13px;padding:8px 0;">No files loaded.</div>';
     document.getElementById('fileModalOverlay').classList.add('show');
 }
@@ -1891,24 +1741,19 @@ function handleFileOverlayClick(e) { if (e.target === document.getElementById('f
 function removeFile(fname) {
     loadedFiles = loadedFiles.filter(f => f !== fname);
     allRows = allRows.filter(r => r.fileName !== fname);
-    
     if (loadedFiles.length === 0) {
         closeFileModal();
         clearAll();
         return;
     }
-    
     updateFileBadge();
     toast(`Removed ${fname}`);
-    
     if (viewMode === 'data') showDataPage();
     else runMatch();
-    
     openFileModal(); 
     saveAppState();
 }
 
-// ── Toast ──────────────────────────────────────────────────────────────────
 let toastTimer;
 function toast(msg, isErr = false) {
   const el = document.getElementById('toast');
@@ -1921,7 +1766,6 @@ function toast(msg, isErr = false) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
-// ── Init ───────────────────────────────────────────────────────────────────
 refreshSelect();
 restoreAppState();
 </script>
