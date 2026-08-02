@@ -1284,7 +1284,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── Suggestion Engine (Strictly utilizing all unmatched reels with exact unrounded sizes) ─
+// ── Suggestion Engine (All 4 Scenarios natively in CM / Inches without MM scaling) ─
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1316,7 +1316,7 @@ function updateSuggestionBoard() {
     });
 
     let count = unmatchedReelsList.length;
-    let formatSize = (mm) => mm.toFixed(2) + ' mm';
+    let formatSize = (val) => Number(val).toFixed(2) + ' cm';
 
     let getCombos = (arr, k) => {
       let results = [];
@@ -1335,7 +1335,7 @@ function updateSuggestionBoard() {
       return results;
     };
 
-    // ── SCENARIO 4: Check if any subset of remaining reels sums close to deckle (within 120 mm below min) ──
+    // ── SCENARIO 4: Check if any subset of remaining reels sums close to deckle (within 20 cm below min) ──
     let scenario4Found = false;
     for (let size = Math.min(4, unmatchedReelsList.length); size >= 2; size--) {
       let subsets = getCombos(unmatchedReelsList, size);
@@ -1344,13 +1344,13 @@ function updateSuggestionBoard() {
         if (Math.max(...bfs) - Math.min(...bfs) > 2) continue;
 
         let subSum = sub.reduce((acc, c) => acc + c.size, 0);
-        if (subSum >= rule.min - 120 && subSum < rule.min) {
+        if (subSum >= rule.min - 20 && subSum < rule.min) {
           let minNeed = rule.min - subSum;
           let maxNeed = rule.max - subSum;
           let comboStr = sub.map(c => formatSize(c.size)).join(' + ');
 
-          // Condition: If minNeed size is >= 650 mm, do NOT split. Just ask the single size.
-          if (minNeed >= 650) {
+          // Condition: If minNeed size is >= 65 cm, do NOT split. Ask single size.
+          if (minNeed >= 65) {
             let needStr = `${formatSize(minNeed)} to ${formatSize(maxNeed)}`;
             let neededReelQty = Math.max(1, Math.round(minNeed / sub[0].size));
 
@@ -1362,7 +1362,7 @@ function updateSuggestionBoard() {
             scenario4Found = true;
             break;
           } 
-          // If minNeed is below 650 mm (e.g. 40, 50, 63 mm), split the size
+          // If minNeed is below 65 cm (e.g. 40, 50, 63 cm), split the size
           else {
             let rToSplit = sub[0];
             let splitSize3 = formatSize(rToSplit.size / 3);
@@ -1384,12 +1384,12 @@ function updateSuggestionBoard() {
 
     if (scenario4Found && finalSuggestions.length > 0) return;
 
-    // ── SCENARIO 1: 3 or more unmatched reels available (including size 74) ──
+    // ── SCENARIO 1: 3 or more unmatched reels available (including smaller sizes like 74 cm) ──
     if (count >= 3) {
       let bestMatch = null;
       let minGap = Infinity;
 
-      // Ensure we test combinations including the smaller reels (like 74mm)
+      // Evaluate all combinations of 3 or 4 reels from the unmatched pool
       for (let size = 3; size <= Math.min(4, unmatchedReelsList.length); size++) {
         let subsets = getCombos(unmatchedReelsList, size);
         for (let sub of subsets) {
@@ -1398,7 +1398,7 @@ function updateSuggestionBoard() {
             let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
             let gap = rule.min - subTotal;
 
-            if (gap >= 10 && gap <= 300 && gap < minGap) {
+            if (gap >= 1 && gap <= 100 && gap < minGap) {
               minGap = gap;
               bestMatch = sub;
             }
@@ -1430,7 +1430,7 @@ function updateSuggestionBoard() {
         let minNeed = rule.min - subTotal;
         let maxNeed = rule.max - subTotal;
 
-        if (maxNeed >= 10) {
+        if (maxNeed >= 1) {
           let neededReelQty = Math.max(1, Math.round(minNeed / r1.size));
           let needStr = `${formatSize(minNeed)} to ${formatSize(maxNeed)}`;
           
@@ -1440,7 +1440,7 @@ function updateSuggestionBoard() {
             ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReelQty} reel)</b>
           </div>`);
 
-          let splitMin = minNeed > 0 ? (minNeed / 2) : 10;
+          let splitMin = minNeed > 0 ? (minNeed / 2) : 1;
           let splitMax = maxNeed / 2;
           let splitNeedStr = `${formatSize(splitMin)} to ${formatSize(splitMax)} (2 reels)`;
 
