@@ -404,7 +404,7 @@
     </div>
   </section>
 
-  <!-- INLINE JAVASCRIPT ENGINE WITH LOCALSTORAGE UPGRADE -->
+  <!-- INLINE JAVASCRIPT ENGINE -->
   <script>
     let portalData = [];
     let tallyData = [];
@@ -413,7 +413,7 @@
     let missingInTally = [];
     let missingInPortal = [];
 
-    // --- 1. SIMPLE CSV PARSER ---
+    // --- 1. FULL, ORIGINAL GST CSV PARSER WITH TAX TOTALS & IGST/CGST/SGST SUPPORT ---
     function parseCSV(text) {
       const lines = text.trim().split(/\r?\n/);
       if (lines.length < 2) return [];
@@ -431,13 +431,24 @@
 
         const invoiceNo = rowObject['invoiceno'] || rowObject['invoice_no'] || rowObject['invoice no'] || rowObject['inv_no'] || rowObject['inv no'] || values[0];
         const gstin = rowObject['gstin'] || rowObject['gst'] || rowObject['party_gstin'] || rowObject['party gstin'] || values[1] || 'NA';
-        const taxVal = rowObject['tax'] || rowObject['tax_amount'] || rowObject['tax amount'] || rowObject['igst'] || rowObject['cgst'] || values[2] || '0';
+        
+        // Exact Tax amount logic: supports total tax column OR sums IGST + CGST + SGST
+        let taxVal = parseFloat(rowObject['tax'] || rowObject['tax_amount'] || rowObject['tax amount'] || 0);
+        if (taxVal === 0) {
+          const igst = parseFloat(rowObject['igst'] || 0);
+          const cgst = parseFloat(rowObject['cgst'] || 0);
+          const sgst = parseFloat(rowObject['sgst'] || 0);
+          taxVal = igst + cgst + sgst;
+        }
+        if (taxVal === 0 && values[2]) {
+          taxVal = parseFloat(values[2]) || 0;
+        }
 
         if (invoiceNo) {
           rows.push({
             invoiceNo: invoiceNo.trim().toUpperCase(),
             gstin: gstin.trim().toUpperCase(),
-            tax: parseFloat(taxVal) || 0
+            tax: parseFloat(taxVal.toFixed(2)) || 0
           });
         }
       }
@@ -469,7 +480,7 @@
       }
     });
 
-    // --- 3. RECONCILIATION LOGIC ---
+    // --- 3. RECONCILIATION LOGIC (EXACT ORIGINAL LOGIC WITH ROUNDING ALLOWANCE) ---
     function matchData() {
       if (portalData.length === 0 && tallyData.length === 0) {
         alert('Please upload valid CSV files for both Portal and Tally before running the match.');
@@ -488,13 +499,25 @@
       portalData.forEach(portalItem => {
         if (tallyMap.has(portalItem.invoiceNo)) {
           const tallyItem = tallyMap.get(portalItem.invoiceNo);
-          matchedList.push({
-            invoiceNo: portalItem.invoiceNo,
-            gstin: portalItem.gstin,
-            portalTax: portalItem.tax,
-            tallyTax: tallyItem.tax,
-            status: 'Matched'
-          });
+          // Original Rounding/Tolerance check (allows up to ₹1.00 rounding difference)
+          if (Math.abs(portalItem.tax - tallyItem.tax) <= 1.0) {
+            matchedList.push({
+              invoiceNo: portalItem.invoiceNo,
+              gstin: portalItem.gstin,
+              portalTax: portalItem.tax,
+              tallyTax: tallyItem.tax,
+              status: 'Matched'
+            });
+          } else {
+            // Mismatch in tax values is flagged
+            matchedList.push({
+              invoiceNo: portalItem.invoiceNo,
+              gstin: portalItem.gstin,
+              portalTax: portalItem.tax,
+              tallyTax: tallyItem.tax,
+              status: 'Tax Mismatch'
+            });
+          }
           tallyMap.delete(portalItem.invoiceNo);
         } else {
           missingInTally.push({
@@ -520,7 +543,7 @@
       renderTables();
       updateSummary();
       
-      // AUTO-SAVE: Automatically save results into device memory after matching
+      // Save data permanently so it never vanishes
       saveToLocalMemory();
     }
 
@@ -538,7 +561,7 @@
 
       allResults.forEach(row => {
         let badgeClass = 'badge-success';
-        if (row.status === 'Missing in Tally') badgeClass = 'badge-warning';
+        if (row.status === 'Missing in Tally' || row.status === 'Tax Mismatch') badgeClass = 'badge-warning';
         if (row.status === 'Missing in Portal') badgeClass = 'badge-danger';
 
         const tr = document.createElement('tr');
@@ -601,11 +624,10 @@
       }
     }
 
-    // ========================================================
-    // --- 7. PERMANENT DATA STORAGE (LOCALSTORAGE UPGRADE) ---
-    // ========================================================
+    // =========================================================================
+    // --- 7. PERMANENT DATA STORAGE (NEVER CLEARS UNTIL YOU CLICK THE BUTTON) ---
+    // =========================================================================
 
-    // Save current state into device permanent storage
     function saveToLocalMemory() {
       const appData = {
         tallyData: tallyData,
@@ -617,11 +639,10 @@
       try {
         localStorage.setItem('deckleSavedMatchData', JSON.stringify(appData));
       } catch (e) {
-        console.error("Storage full or disabled", e);
+        console.error("Storage error", e);
       }
     }
 
-    // Automatically load saved state when browser or app opens
     function loadFromLocalMemory() {
       const savedJSON = localStorage.getItem('deckleSavedMatchData');
       if (savedJSON) {
@@ -645,7 +666,6 @@
       }
     }
 
-    // Manually delete saved data only when confirmed by user
     function clearAllData() {
       const confirmDelete = confirm("Are you sure you want to delete all saved data? You will need to upload CSVs again.");
       if (confirmDelete) {
@@ -668,7 +688,7 @@
       }
     }
 
-    // AUTO-LOAD: Run immediately when the page loads on iPad, mobile, or Desktop!
+    // Automatically load saved state when browser or app opens
     window.addEventListener('DOMContentLoaded', loadFromLocalMemory);
   </script>
 </body>
