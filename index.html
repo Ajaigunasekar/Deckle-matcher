@@ -1454,6 +1454,7 @@ function setFilter(f) {
   if(viewMode === 'data') return;
   viewMode = 'match';
   currentFilter = f;
+  let setsLabel = currentFilter === 'nomatch' ? 'Reels' : 'Sets';
   document.querySelectorAll('.pill').forEach(p => {
     p.className = 'pill';
     if (p.dataset.filter === f) {
@@ -1633,11 +1634,12 @@ function renderTable() {
         }).join('');
     }
   } else {
+    let setsLabel = currentFilter === 'nomatch' ? 'Reels' : 'Sets';
     thead.innerHTML = `<tr>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Sizes & Deckle <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('reel')">Sets <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('reel')">${setsLabel} <span class="sort-arrow">↕</span></th>
       <th class="center">Dia</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
@@ -1706,7 +1708,7 @@ function exportPDF() {
           body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
-          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', 'Sets', 'Dia', 'Tons']];
+          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', currentFilter === 'nomatch' ? 'Reels' : 'Sets', 'Dia', 'Tons']];
           body = viewRows.map(r => {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm} / ${r.bf}`;
