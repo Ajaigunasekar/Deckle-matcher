@@ -136,7 +136,7 @@
     position: relative;
   }
   .upload-zone:active, .upload-zone.drag { border-color: var(--accent); background: rgba(79,142,247,0.06); }
-  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; z-index: 10; }
   .upload-icon { font-size: 28px; margin-bottom: 8px; }
   .upload-text { font-size: 13px; color: var(--sub); }
   .upload-text b { color: var(--accent); }
@@ -1284,7 +1284,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── Suggestion Engine (Fully integrated multi-scenario combination analyzer) ─
+// ── Suggestion Engine (Strictly 4 Scenarios, using all reels including 74mm/74cm) ─
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1316,45 +1316,43 @@ function updateSuggestionBoard() {
     });
 
     let count = unmatchedReelsList.length;
+    let totalUnmatchedSum = unmatchedReelsList.reduce((sum, c) => sum + c.size, 0);
     let toCm = (mm) => (mm / 10).toFixed(1) + ' cm';
 
-    // ── STEP A: Test Scenario 4 (Close-to-deckle sum check with 65 cm threshold) ──
-    // Let's find any combination of unmatched reels whose sum is near the deckle
-    let evaluatedScenario4 = false;
-    
-    // Check subsets of unmatched reels
-    for (let size = Math.min(4, unmatchedReelsList.length); size >= 2; size--) {
-      // Simple combination generator for subsets
-      let getCombos = (arr, k) => {
-        let results = [];
-        let helper = (start, combo) => {
-          if (combo.length === k) {
-            results.push([...combo]);
-            return;
-          }
-          for (let i = start; i < arr.length; i++) {
-            combo.push(arr[i]);
-            helper(i + 1, combo);
-            combo.pop();
-          }
-        };
-        helper(0, []);
-        return results;
+    // Helper to generate subsets of size k
+    let getCombos = (arr, k) => {
+      let results = [];
+      let helper = (start, combo) => {
+        if (combo.length === k) {
+          results.push([...combo]);
+          return;
+        }
+        for (let i = start; i < arr.length; i++) {
+          combo.push(arr[i]);
+          helper(i + 1, combo);
+          combo.pop();
+        }
       };
+      helper(0, []);
+      return results;
+    };
 
+    // ── SCENARIO 4: Check if any subset of remaining reels sums close to deckle (e.g., within 100mm below min) ──
+    let scenario4Found = false;
+    for (let size = Math.min(4, unmatchedReelsList.length); size >= 2; size--) {
       let subsets = getCombos(unmatchedReelsList, size);
       for (let sub of subsets) {
         let bfs = sub.map(c => c.bf);
         if (Math.max(...bfs) - Math.min(...bfs) > 2) continue;
 
         let subSum = sub.reduce((acc, c) => acc + c.size, 0);
-        if (subSum >= rule.min - 100 && subSum < rule.min) {
+        if (subSum >= rule.min - 120 && subSum < rule.min) {
           let minNeed = rule.min - subSum;
-          
-          // CONDITION FOR SCENARIO 4: If minNeed size is >= 65 cm (650 mm), do NOT split. Just ask the remaining single size.
+          let maxNeed = rule.max - subSum;
+          let comboStr = sub.map(c => toCm(c.size)).join(' + ');
+
+          // Condition: If minNeed size is >= 65 cm (650 mm), do NOT split. Just ask the single size.
           if (minNeed >= 650) {
-            let maxNeed = rule.max - subSum;
-            let comboStr = sub.map(c => toCm(c.size)).join(' + ');
             let needStr = `${toCm(minNeed)} to ${toCm(maxNeed)}`;
             let neededReelQty = Math.max(1, Math.round(minNeed / sub[0].size));
 
@@ -1363,50 +1361,49 @@ function updateSuggestionBoard() {
               <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${toCm(subSum)}<br>
               ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReelQty} reel)</b>
             </div>`);
-            evaluatedScenario4 = true;
+            scenario4Found = true;
             break;
           } 
-          // If minNeed size is below 65 cm (e.g. 40, 50, 63 mm/cm), split the size and fall through
+          // If minNeed is below 65 cm (e.g. 40, 50, 63 mm/cm), split the size
           else {
             let rToSplit = sub[0];
             let splitSize3 = toCm(rToSplit.size / 3);
             let splitSize2 = toCm(rToSplit.size / 2);
-            let comboStr = sub.map(c => toCm(c.size)).join(' + ');
-            let needStr = `${toCm(minNeed)} to ${toCm(rule.max - subSum)}`;
+            let needStr = `${toCm(minNeed)} to ${toCm(maxNeed)}`;
 
             finalSuggestions.push(`<div class="suggestion-item">
               <div style="font-size:11px; color:var(--sub); margin-bottom:4px; text-transform:uppercase;">Scenario 4 (Close Deckle - Split Required)</div>
               <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${toCm(subSum)}<br>
               ↳ Split size <b>${toCm(rToSplit.size)}</b> into <b>${splitSize3} (3 reels)</b> or <b>${splitSize2} (2 reels)</b>, then ask need: <b style="color:var(--red);">${needStr}</b>
             </div>`);
-            evaluatedScenario4 = true;
+            scenario4Found = true;
             break;
           }
         }
       }
-      if (evaluatedScenario4) break;
+      if (scenario4Found) break;
     }
 
-    if (evaluatedScenario4 && finalSuggestions.length > 0) return; // Stop if Scenario 4 matched successfully
+    if (scenario4Found && finalSuggestions.length > 0) return;
 
-    // ── STEP B: Scenario 1 (3 or more unmatched reels available) ──
+    // ── SCENARIO 1: 3 or more unmatched reels available (including size 74) ──
     if (count >= 3) {
       let bestMatch = null;
       let minGap = Infinity;
 
-      for (let i = 0; i < unmatchedReelsList.length; i++) {
-        for (let j = i + 1; j < unmatchedReelsList.length; j++) {
-          for (let k = j + 1; k < unmatchedReelsList.length; k++) {
-            let subCombo = [unmatchedReelsList[i], unmatchedReelsList[j], unmatchedReelsList[k]];
-            let bfs = subCombo.map(c => c.bf);
-            if (Math.max(...bfs) - Math.min(...bfs) <= 2) {
-              let subTotal = subCombo.reduce((sum, c) => sum + c.size, 0);
-              let gap = rule.min - subTotal;
+      // Check all combinations of 3 or 4 reels from unmatched pool
+      for (let size = 3; size <= Math.min(4, unmatchedReelsList.length); size++) {
+        let subsets = getCombos(unmatchedReelsList, size);
+        for (let sub of subsets) {
+          let bfs = sub.map(c => c.bf);
+          if (Math.max(...bfs) - Math.min(...bfs) <= 2) {
+            let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
+            let gap = rule.min - subTotal;
 
-              if (gap >= 10 && gap <= 250 && gap < minGap) {
-                minGap = gap;
-                bestMatch = subCombo;
-              }
+            // Must leave a reasonable gap to fill
+            if (gap >= 10 && gap <= 280 && gap < minGap) {
+              minGap = gap;
+              bestMatch = sub;
             }
           }
         }
@@ -1427,7 +1424,7 @@ function updateSuggestionBoard() {
         </div>`);
       }
     } 
-    // ── STEP C: Scenario 2 (Exactly 2 sizes available) ──
+    // ── SCENARIO 2: Exactly 2 sizes available ──
     else if (count === 2) {
       let r1 = unmatchedReelsList[0];
       let r2 = unmatchedReelsList[1];
@@ -1458,7 +1455,7 @@ function updateSuggestionBoard() {
         }
       }
     } 
-    // ── STEP D: Scenario 3 (Only 1 size remaining) ──
+    // ── SCENARIO 3: Only 1 size remaining ──
     else if (count === 1) {
       let r1 = unmatchedReelsList[0];
       let minNeed = rule.min - r1.size;
@@ -1756,7 +1753,7 @@ function exportPDF() {
                   let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
                   gsmBfStr = `${r.gsm} / ${maxBfInCombo}`;
               }
-              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)]);
+              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)];
           });
       }
 
@@ -1884,7 +1881,7 @@ function removeFile(fname) {
     toast(`Removed ${fname}`);
     if (viewMode === 'data') showDataPage();
     else runMatch();
-    openFileModal(); 
+    openFileManagerModal ? openFileManagerModal() : openFileModal();
     saveAppState();
 }
 
