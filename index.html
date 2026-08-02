@@ -1785,7 +1785,9 @@ function renderTable() {
           return `<div style="padding:13px 14px; ${i < uniqueItems.length - 1 ? 'border-bottom:1px solid rgba(122,128,160,0.3);' : ''}">${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${totalReelsUsedInCombo})</div>`;
         }).join('');
         
-        gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${r.bf}</div>`;
+        // DISPLAY UPDATE: Automatically find and show the highest BF in the matched combination
+        let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
+        gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${maxBfInCombo}</div>`;
       }
 
       return `<tr class="${cls}">
@@ -1850,6 +1852,10 @@ function exportPDF() {
                   // Construct clean multi-line string for PDF cells
                   custStr = uniqueItems.map(c => `${c.customer} [${c.displaySize || Number(c.size).toFixed(2)}] (${c.count * r.reel})`).join('\n');
                   sizeStr = r.combo_str ? `${r.combo_str}\nTotal: ${Number(r._size).toFixed(2)}` : `${Number(r._size).toFixed(2)}`;
+                  
+                  // PDF Export also reflects the highest BF in the combination
+                  let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
+                  gsmBfStr = `${r.gsm} / ${maxBfInCombo}`;
               }
               
               return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)];
