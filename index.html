@@ -1284,7 +1284,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── Suggestion Engine (Strictly 4 Scenarios, using all reels including 74mm/74cm) ─
+// ── Suggestion Engine (Strictly handling all 4 scenarios with exact unrounded sizes) ─
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1317,9 +1317,8 @@ function updateSuggestionBoard() {
 
     let count = unmatchedReelsList.length;
     let totalUnmatchedSum = unmatchedReelsList.reduce((sum, c) => sum + c.size, 0);
-    let toCm = (mm) => (mm / 10).toFixed(1) + ' cm';
+    let formatSize = (mm) => mm.toFixed(2) + ' mm';
 
-    // Helper to generate subsets of size k
     let getCombos = (arr, k) => {
       let results = [];
       let helper = (start, combo) => {
@@ -1337,7 +1336,7 @@ function updateSuggestionBoard() {
       return results;
     };
 
-    // ── SCENARIO 4: Check if any subset of remaining reels sums close to deckle (e.g., within 100mm below min) ──
+    // ── SCENARIO 4 Check: Total unmatched sum close to deckle range ──
     let scenario4Found = false;
     for (let size = Math.min(4, unmatchedReelsList.length); size >= 2; size--) {
       let subsets = getCombos(unmatchedReelsList, size);
@@ -1349,32 +1348,32 @@ function updateSuggestionBoard() {
         if (subSum >= rule.min - 120 && subSum < rule.min) {
           let minNeed = rule.min - subSum;
           let maxNeed = rule.max - subSum;
-          let comboStr = sub.map(c => toCm(c.size)).join(' + ');
+          let comboStr = sub.map(c => formatSize(c.size)).join(' + ');
 
-          // Condition: If minNeed size is >= 65 cm (650 mm), do NOT split. Just ask the single size.
+          // Condition: If minNeed size is >= 650 mm (65 cm), do NOT split. Just ask single size.
           if (minNeed >= 650) {
-            let needStr = `${toCm(minNeed)} to ${toCm(maxNeed)}`;
+            let needStr = `${formatSize(minNeed)} to ${formatSize(maxNeed)}`;
             let neededReelQty = Math.max(1, Math.round(minNeed / sub[0].size));
 
             finalSuggestions.push(`<div class="suggestion-item">
               <div style="font-size:11px; color:var(--sub); margin-bottom:4px; text-transform:uppercase;">Scenario 4 (Close Deckle - No Split Needed)</div>
-              <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${toCm(subSum)}<br>
+              <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${formatSize(subSum)}<br>
               ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReelQty} reel)</b>
             </div>`);
             scenario4Found = true;
             break;
           } 
-          // If minNeed is below 65 cm (e.g. 40, 50, 63 mm/cm), split the size
+          // If minNeed is below 650 mm (< 65 cm), split the size
           else {
             let rToSplit = sub[0];
-            let splitSize3 = toCm(rToSplit.size / 3);
-            let splitSize2 = toCm(rToSplit.size / 2);
-            let needStr = `${toCm(minNeed)} to ${toCm(maxNeed)}`;
+            let splitSize3 = formatSize(rToSplit.size / 3);
+            let splitSize2 = formatSize(rToSplit.size / 2);
+            let needStr = `${formatSize(minNeed)} to ${formatSize(maxNeed)}`;
 
             finalSuggestions.push(`<div class="suggestion-item">
               <div style="font-size:11px; color:var(--sub); margin-bottom:4px; text-transform:uppercase;">Scenario 4 (Close Deckle - Split Required)</div>
-              <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${toCm(subSum)}<br>
-              ↳ Split size <b>${toCm(rToSplit.size)}</b> into <b>${splitSize3} (3 reels)</b> or <b>${splitSize2} (2 reels)</b>, then ask need: <b style="color:var(--red);">${needStr}</b>
+              <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${formatSize(subSum)}<br>
+              ↳ Split size <b>${formatSize(rToSplit.size)}</b> into <b>${splitSize3} (3 reels)</b> or <b>${splitSize2} (2 reels)</b>, then ask need: <b style="color:var(--red);">${needStr}</b>
             </div>`);
             scenario4Found = true;
             break;
@@ -1391,7 +1390,6 @@ function updateSuggestionBoard() {
       let bestMatch = null;
       let minGap = Infinity;
 
-      // Check all combinations of 3 or 4 reels from unmatched pool
       for (let size = 3; size <= Math.min(4, unmatchedReelsList.length); size++) {
         let subsets = getCombos(unmatchedReelsList, size);
         for (let sub of subsets) {
@@ -1400,8 +1398,7 @@ function updateSuggestionBoard() {
             let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
             let gap = rule.min - subTotal;
 
-            // Must leave a reasonable gap to fill
-            if (gap >= 10 && gap <= 280 && gap < minGap) {
+            if (gap >= 10 && gap <= 300 && gap < minGap) {
               minGap = gap;
               bestMatch = sub;
             }
@@ -1413,13 +1410,13 @@ function updateSuggestionBoard() {
         let subTotal = bestMatch.reduce((sum, c) => sum + c.size, 0);
         let minNeed = rule.min - subTotal;
         let maxNeed = rule.max - subTotal;
-        let comboStr = bestMatch.map(c => toCm(c.size)).join(' + ');
+        let comboStr = bestMatch.map(c => formatSize(c.size)).join(' + ');
         let neededReelQty = Math.max(1, Math.round(minNeed / bestMatch[0].size));
-        let needStr = `${toCm(minNeed)} to ${toCm(maxNeed)}`;
+        let needStr = `${formatSize(minNeed)} to ${formatSize(maxNeed)}`;
 
         finalSuggestions.push(`<div class="suggestion-item">
           <div style="font-size:11px; color:var(--sub); margin-bottom:4px; text-transform:uppercase;">Scenario 1 Optimization</div>
-          <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${toCm(subTotal)}<br>
+          <span style="color:var(--accent); font-family:var(--mono);">${comboStr}</span> = ${formatSize(subTotal)}<br>
           ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReelQty} reel)</b>
         </div>`);
       }
@@ -1435,21 +1432,21 @@ function updateSuggestionBoard() {
 
         if (maxNeed >= 10) {
           let neededReelQty = Math.max(1, Math.round(minNeed / r1.size));
-          let needStr = `${toCm(minNeed)} to ${toCm(maxNeed)}`;
+          let needStr = `${formatSize(minNeed)} to ${formatSize(maxNeed)}`;
           
           finalSuggestions.push(`<div class="suggestion-item">
             <div style="font-size:11px; color:var(--sub); margin-bottom:4px; text-transform:uppercase;">Scenario 2 (Option A: Single Filler)</div>
-            <span style="color:var(--accent); font-family:var(--mono);">${toCm(r1.size)} + ${toCm(r2.size)}</span> = ${toCm(subTotal)}<br>
+            <span style="color:var(--accent); font-family:var(--mono);">${formatSize(r1.size)} + ${formatSize(r2.size)}</span> = ${formatSize(subTotal)}<br>
             ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReelQty} reel)</b>
           </div>`);
 
           let splitMin = minNeed > 0 ? (minNeed / 2) : 10;
           let splitMax = maxNeed / 2;
-          let splitNeedStr = `${toCm(splitMin)} to ${toCm(splitMax)} (2 reels)`;
+          let splitNeedStr = `${formatSize(splitMin)} to ${formatSize(splitMax)} (2 reels)`;
 
           finalSuggestions.push(`<div class="suggestion-item">
             <div style="font-size:11px; color:var(--sub); margin-bottom:4px; text-transform:uppercase;">Scenario 2 (Option B: Split Size)</div>
-            <span style="color:var(--accent); font-family:var(--mono);">${toCm(r1.size)} + ${toCm(r2.size)}</span> = ${toCm(subTotal)}<br>
+            <span style="color:var(--accent); font-family:var(--mono);">${formatSize(r1.size)} + ${formatSize(r2.size)}</span> = ${formatSize(subTotal)}<br>
             ↳ Ask need: <b style="color:var(--red);">${splitNeedStr}</b>
           </div>`);
         }
@@ -1461,11 +1458,11 @@ function updateSuggestionBoard() {
       let minNeed = rule.min - r1.size;
       let maxNeed = rule.max - r1.size;
       let neededReelQty = Math.max(1, Math.round(minNeed / r1.size));
-      let needStr = `${toCm(minNeed)} to ${toCm(maxNeed)}`;
+      let needStr = `${formatSize(minNeed)} to ${formatSize(maxNeed)}`;
 
       finalSuggestions.push(`<div class="suggestion-item">
         <div style="font-size:11px; color:var(--sub); margin-bottom:4px; text-transform:uppercase;">Scenario 3 (Single Size Adjustment)</div>
-        Existing Size: <span style="color:var(--accent); font-family:var(--mono);">${toCm(r1.size)}</span><br>
+        Existing Size: <span style="color:var(--accent); font-family:var(--mono);">${formatSize(r1.size)}</span><br>
         ↳ Ask need: <b style="color:var(--red);">${needStr} (${neededReelQty} reel)</b>
       </div>`);
     }
@@ -1881,7 +1878,7 @@ function removeFile(fname) {
     toast(`Removed ${fname}`);
     if (viewMode === 'data') showDataPage();
     else runMatch();
-    openFileManagerModal ? openFileManagerModal() : openFileModal();
+    openFileModal(); 
     saveAppState();
 }
 
