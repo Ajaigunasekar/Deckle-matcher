@@ -319,7 +319,7 @@
   .suggestion-title {
     font-family: var(--mono);
     font-size: 12px;
-    color: var(--text);
+    color: var(--text); 
     font-weight: bold;
     margin-bottom: 12px;
     letter-spacing: 0.5px;
@@ -768,6 +768,10 @@
 function parseSizeInput(valStr) {
     if (!valStr) return { size: 0, displaySize: '0' };
     let str = String(valStr).toLowerCase().trim();
+    
+    // Support commas as decimals
+    str = str.replace(',', '.');
+    
     let isInch = str.includes('"') || str.includes('”') || str.includes('“') || str.includes('″') || str.includes("'") || str.includes('’') || str.includes('‘') || str.includes('in');
     let num = parseFloat(str.replace(/[^\d.-]/g, '')) || 0;
     if (isInch && num > 0) {
@@ -1299,7 +1303,7 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── CLEAN SUGGESTION ENGINE: Strict >=65 cm gap, No scenario labels, No split text ──
+// ── REFINED SUGGESTION ENGINE: Clean UI & Continuous Coverage ──
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1333,23 +1337,6 @@ function updateSuggestionBoard() {
     let formatSize = (val) => Number(val).toFixed(2) + ' cm';
     let toRangeStr = (minNeed, maxNeed) => `${Number(minNeed).toFixed(1)} cm to ${Number(maxNeed).toFixed(1)} cm`;
 
-    let getCombos = (arr, k) => {
-      let results = [];
-      let helper = (start, combo) => {
-        if (combo.length === k) {
-          results.push([...combo]);
-          return;
-        }
-        for (let i = start; i < arr.length; i++) {
-          combo.push(arr[i]);
-          helper(i + 1, combo);
-          combo.pop();
-        }
-      };
-      helper(0, []);
-      return results;
-    };
-
     let evaluateSubset = (sub) => {
       let bfs = sub.map(c => c.bf);
       if (Math.max(...bfs) - Math.min(...bfs) > 2) return null;
@@ -1367,7 +1354,7 @@ function updateSuggestionBoard() {
       let maxBf = Math.max(...sub.map(c => c.bf));
       let dia = sub[0].dia;
 
-      // Accurately determine how many sets we can run based on actual selected inventory
+      // Calculate sets available strictly from remaining selected inventory
       let counts = {};
       sub.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
       let sets = Math.min(...Object.keys(counts).map(id => {
@@ -1376,96 +1363,83 @@ function updateSuggestionBoard() {
       }));
       if (sets < 1) sets = 1;
 
-      // STRICT RULE: If the needed gap is above 150 cm, divide it until it drops below 150 cm.
-      if (minNeed >= 150) {
-        let parts = 1;
-        while ((minNeed / parts) > 150) {
-          parts++;
-        }
-        let splitMin = minNeed / parts;
-        let splitMax = maxNeed / parts;
-        let neededReels = sets * parts; 
-
-        let needStr = toRangeStr(splitMin, splitMax);
-
-        return {
-          html: `<div class="suggestion-item">
-            <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
-            <span style="color:#0055ff; font-family:var(--mono); font-size:14px; font-weight:bold;">${comboStr}</span> <span style="color:#0055ff; font-size:14px; font-weight:bold;">= ${formatSize(subTotal)}</span><br>
-            ↳ Ask need: <b style="color:#ff0000;">${needStr} (${neededReels} reels)</b>
-          </div>`,
-          usedIds: sub.map(c => c.id)
-        };
-      } else {
-        let neededReels = sets;
-        let needStr = toRangeStr(minNeed, maxNeed);
-
-        return {
-          html: `<div class="suggestion-item">
-            <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
-            <span style="color:#0055ff; font-family:var(--mono); font-size:14px; font-weight:bold;">${comboStr}</span> <span style="color:#0055ff; font-size:14px; font-weight:bold;">= ${formatSize(subTotal)}</span><br>
-            ↳ Ask need: <b style="color:#ff0000;">${needStr} (${neededReels} reel${neededReels > 1 ? 's' : ''})</b>
-          </div>`,
-          usedIds: sub.map(c => c.id)
-        };
+      // STRICT RULE: If the needed gap is 150 cm or above, divide it until it drops below 150 cm.
+      let parts = 1;
+      while ((minNeed / parts) >= 150) {
+        parts++;
       }
+
+      let reqMin = minNeed / parts;
+      let reqMax = maxNeed / parts;
+      let neededReels = sets * parts;
+
+      let needStr = toRangeStr(reqMin, reqMax);
+
+      return {
+        html: `<div class="suggestion-item">
+          <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
+          <span style="color:#0055ff; font-family:var(--mono); font-size:14px; font-weight:bold;">${comboStr}</span> <span style="color:#0055ff; font-size:14px; font-weight:bold;">= ${formatSize(subTotal)}</span><br>
+          ↳ Ask need: <b style="color:#ff0000;">${needStr} (${neededReels} reel${neededReels > 1 ? 's' : ''})</b>
+        </div>`,
+        usedIds: sub.map(c => c.id),
+        setsConsumed: sets
+      };
     };
 
-    let bestResult = null;
-    let minGap = Infinity;
-
-    // Evaluate combinations starting from largest sub-group down to 1
-    for (let size = Math.min(4, unmatchedReelsList.length); size >= 1; size--) {
-      let subsets = getCombos(unmatchedReelsList, size);
-      for (let sub of subsets) {
-        let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
-        let gap = rule.min - subTotal;
-        if (gap >= 65 && gap < minGap) {
-          let res = evaluateSubset(sub);
-          if (res) {
-            minGap = gap;
-            bestResult = res;
-          }
+    let getCombos = (arr, k) => {
+      let results = [];
+      let helper = (start, combo) => {
+        if (combo.length === k) {
+          results.push([...combo]);
+          return;
         }
-      }
-      if (bestResult) break;
-    }
+        for (let i = start; i < arr.length; i++) {
+          combo.push(arr[i]);
+          helper(i + 1, combo);
+          combo.pop();
+        }
+      };
+      helper(0, []);
+      return results;
+    };
 
-    if (bestResult) {
-      finalSuggestions.push(bestResult.html);
+    let keepSearching = true;
+    while(keepSearching && unmatchedReelsList.length > 0) {
+        let bestResult = null;
+        let minGap = Infinity;
 
-      // Extract left-over reels that weren't used in the primary recommendation
-      let leftoverReels = [...unmatchedReelsList];
-      bestResult.usedIds.forEach(usedId => {
-        let idx = leftoverReels.findIndex(r => r.id === usedId);
-        if (idx > -1) leftoverReels.splice(idx, 1);
-      });
-
-      // Provide a secondary recommendation specifically to address those leftover reels
-      if (leftoverReels.length > 0) {
-        let leftoverResult = null;
-        let leftMinGap = Infinity;
-
-        for (let size = Math.min(4, leftoverReels.length); size >= 1; size--) {
-          let subsets = getCombos(leftoverReels, size);
+        // Start checking combinations from highest quantity down to 1
+        for (let size = Math.min(4, unmatchedReelsList.length); size >= 1; size--) {
+          let subsets = getCombos(unmatchedReelsList, size);
           for (let sub of subsets) {
             let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
             let gap = rule.min - subTotal;
-            if (gap >= 65 && gap < leftMinGap) {
+            if (gap >= 65 && gap < minGap) {
               let res = evaluateSubset(sub);
               if (res) {
-                leftMinGap = gap;
-                leftoverResult = res;
+                minGap = gap;
+                bestResult = res;
               }
             }
           }
-          if (leftoverResult) break;
+          if (bestResult) break;
         }
 
-        if (leftoverResult) {
-          finalSuggestions.push(leftoverResult.html);
+        if (bestResult) {
+          finalSuggestions.push(bestResult.html);
+
+          // Purge consumed reels for the NEXT iteration so all inventory gets swept correctly
+          let consumedIds = bestResult.usedIds;
+          for(let s = 0; s < bestResult.setsConsumed; s++) {
+             consumedIds.forEach(usedId => {
+                let idx = unmatchedReelsList.findIndex(r => r.id === usedId);
+                if (idx > -1) unmatchedReelsList.splice(idx, 1);
+             });
+          }
+        } else {
+          // If no gap >= 65 can be formed from the leftovers, we must stop to prevent infinity loops
+          keepSearching = false;
         }
-      }
     }
   });
 
@@ -1481,7 +1455,6 @@ function setFilter(f) {
   if(viewMode === 'data') return;
   viewMode = 'match';
   currentFilter = f;
-  let setsLabel = currentFilter === 'nomatch' ? 'Reels' : 'Sets';
   document.querySelectorAll('.pill').forEach(p => {
     p.className = 'pill';
     if (p.dataset.filter === f) {
@@ -1589,7 +1562,7 @@ function renderTable() {
       btnExportCSV.style.display = 'none';
       btnEdit.innerHTML = isEditingData ? '💾 Save' : '✏️ Edit';
       btnEdit.style.background = isEditingData ? 'var(--accent)' : 'transparent';
-      btnEdit.style.color = isEditingData ? '#fff' : 'var(--sub)';
+      btnEdit.style.color = isEditingData ? '#000000' : 'var(--sub)';
       document.getElementById('suggestionBoard').style.display = 'none';
   } else {
       statsBar.style.display = 'flex';
@@ -1707,7 +1680,7 @@ function renderTable() {
           </div>
         </td>
         <td class="size-val center" style="vertical-align:middle; padding:13px 14px;">
-          ${r._match && r.combo_str ? `<div style="font-size:16px; color:var(--accent); margin-bottom:8px; font-weight:900; letter-spacing:0.5px; background:rgba(59,130,246,0.1); padding:6px 10px; border-radius:6px; display:inline-block; border: 1px solid rgba(59,130,246,0.3);">${r.combo_str}</div>` : ''}
+          ${r._match && r.combo_str ? `<div style="font-size:16px; color:var(--accent); margin-bottom:8px; font-weight:900; letter-spacing:0.5px; background:rgba(0,85,255,0.1); padding:6px 10px; border-radius:6px; display:inline-block; border: 1px solid rgba(0,85,255,0.3);">${r.combo_str}</div>` : ''}
           <div style="font-size:16px; font-weight:bold; color:var(--green);">${r._match ? Number(r._size).toFixed(2) : (r.displaySize || Number(r.size).toFixed(2))}</div>
         </td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
@@ -1764,7 +1737,7 @@ function exportPDF() {
           head: head,
           body: body,
           theme: 'grid',
-          headStyles: { fillColor: [79, 142, 247] },
+          headStyles: { fillColor: [0, 85, 255] },
           styles: { fontSize: 10, cellPadding: 4, valign: 'middle' }
       });
       doc.save(`Deckle_Match_${title.replace(/\s+/g, '_')}.pdf`);
@@ -1822,7 +1795,7 @@ function renderRuleList() {
         <button class="btn-sm danger" onclick="deleteRule(${i})">✕ Delete</button>
       </div>
     </div>
-  `).join('') || '<div style="color:var(--sub);font-size:13px;padding:8px 0;">No deckle ranges defined yet.</div>';
+  `).join('') || '<div style="color:var(--sub);font-size:13px;padding:8px 0; font-weight:500;">No deckle ranges defined yet.</div>';
 }
 
 function addRule() {
@@ -1863,7 +1836,7 @@ function openFileModal() {
           </div>
         </div>`;
     }).join('');
-    document.getElementById('fileList').innerHTML = html || '<div style="color:var(--sub);font-size:13px;padding:8px 0;">No files loaded.</div>';
+    document.getElementById('fileList').innerHTML = html || '<div style="color:var(--sub);font-size:13px;padding:8px 0; font-weight:500;">No files loaded.</div>';
     document.getElementById('fileModalOverlay').classList.add('show');
 }
 function closeFileModal() { document.getElementById('fileModalOverlay').classList.remove('show'); }
