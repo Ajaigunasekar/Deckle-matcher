@@ -308,6 +308,14 @@
     -webkit-overflow-scrolling: touch;
   }
   
+  #actionBlock {
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
   /* ── Suggestion Board ── */
   .suggestion-board {
     background: rgba(245, 158, 11, 0.08);
@@ -346,7 +354,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
-    min-width: 900px; /* Widened slightly to accommodate new columns */
+    min-width: 1000px;
   }
   thead th {
     font-family: var(--mono);
@@ -622,7 +630,6 @@
           Allow +/- 2 BF Tolerance
         </label>
       </div>
-
     </div>
 
     <div>
@@ -688,14 +695,18 @@
       <div class="empty-sub">Upload your Excel file or click 'Manage Data' to add manual orders.</div>
     </div>
     
-    <div id="actionBlock" style="display:none; margin-bottom: 16px;">
+    <div id="actionBlock">
       <button id="btnBackToMatches" class="btn-secondary" onclick="runMatch()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold;">
         ⬅ Back to Matches
       </button>
-      <button id="btnEditData" class="btn-secondary" onclick="toggleEditMode()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; margin-left: 8px;">
+      <button id="btnEditData" class="btn-secondary" onclick="toggleEditMode()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold;">
         ✏️ Edit
       </button>
-      <button id="btnExportCSV" class="btn-secondary" onclick="exportUnmatchedExcel()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; margin-left: 8px; border-color: var(--green); color: var(--green);">
+      
+      <!-- NEW SEARCH BAR -->
+      <input type="text" id="searchInput" placeholder="Search customer or size..." oninput="renderTable()" style="display:none; width: 100%; max-width: 250px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-left: auto; color: var(--text); background: var(--surface);">
+      
+      <button id="btnExportCSV" class="btn-secondary" onclick="exportUnmatchedExcel()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; border-color: var(--green); color: var(--green);">
         ⬇ Export Excel
       </button>
     </div>
@@ -926,6 +937,9 @@ function handleFile(input, isAppend) {
           if (!loadedFiles.includes(currentFileName)) loadedFiles.push(currentFileName);
       }
 
+      let d = new Date();
+      let fallbackDate = String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear();
+
       let newRows = rows.map((r, index) => {
         let rowStrKeys = Object.keys(r);
         let getVal = (keywords) => {
@@ -966,7 +980,10 @@ function handleFile(input, isAppend) {
         let cobb = String(getVal(['cobb']) || '-').trim();
         let moisture = String(getVal(['moist', 'moisture']) || '-').trim();
         
-        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, cobb, moisture, reel, dia: String(dia), fileName: currentFileName, _selected: true };
+        let dateRaw = getVal(['date', 'added']);
+        let dateStr = dateRaw ? String(dateRaw).trim() : fallbackDate;
+        
+        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, cobb, moisture, reel, dia: String(dia), date: dateStr, fileName: currentFileName, _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       if (isAppend) {
@@ -1095,6 +1112,9 @@ function addManualOrder() {
       updateFileBadge();
   }
 
+  let d = new Date();
+  let todayDate = String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear();
+
   let newId = allRows.length > 0 ? Math.max(...allRows.map(r => r.id)) + 1 : 0;
   
   allRows.push({
@@ -1108,6 +1128,7 @@ function addManualOrder() {
     moisture: moisture,
     reel: reel,
     dia: String(dia),
+    date: todayDate,
     fileName: 'Manual Entry',
     _selected: true
   });
@@ -1148,7 +1169,6 @@ function showDataPage() {
   saveAppState();
 }
 
-// ── MATCHING ENGINE: Strict Dia, Cobb, Moist & Dynamic BF Tolerance ──
 function runMatch() {
   let activeRows = allRows.filter(r => r._selected !== false);
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
@@ -1254,6 +1274,7 @@ function runMatch() {
 
         let sizeEquation = bestCombo.length > 1 ? bestCombo.map(c => c.displaySize || Number(c.size).toFixed(2)).join(' + ') : '';
         let totalSize = bestCombo.reduce((sum, c) => sum + c.size, 0);
+        let lossPct = ((rule.max - totalSize) / rule.max) * 100;
 
         matchRows.push({
           comboData: bestCombo, 
@@ -1266,6 +1287,7 @@ function runMatch() {
           moisture: bestCombo[0].moisture,
           reel: sets, 
           dia: bestCombo[0].dia,
+          deckle_loss: lossPct.toFixed(2),
           tons: calcTons(totalSize, sets, bestCombo[0].dia),
           _match: true
         });
@@ -1568,6 +1590,7 @@ function exportUnmatchedExcel() {
           "Moisture": r.moisture || '-',
           "Reels": r.reel,
           "Dia": r.dia || '-',
+          "Date": r.date || '-',
           "Tons": Number(r.tons.toFixed(3))
       }));
       let ws = XLSX.utils.json_to_sheet(exportData);
@@ -1591,6 +1614,7 @@ function renderTable() {
   const btnBack = document.getElementById('btnBackToMatches');
   const btnEdit = document.getElementById('btnEditData');
   const btnExportCSV = document.getElementById('btnExportCSV');
+  const searchInput = document.getElementById('searchInput');
 
   if (!allRows.length && viewMode !== 'data') {
     table.style.display = 'none';
@@ -1605,26 +1629,40 @@ function renderTable() {
   empty.style.display = 'none';
   table.style.display = 'table';
   
+  let query = searchInput ? searchInput.value.toLowerCase() : '';
+  let displayRows = viewRows;
+
   if (viewMode === 'data') {
       statsBar.style.display = 'none';
       dataForm.style.display = 'block';
-      actionBlock.style.display = 'block';
+      actionBlock.style.display = 'flex';
       btnBack.style.display = matchRows.length > 0 ? 'inline-flex' : 'none';
       btnEdit.style.display = 'inline-flex';
+      searchInput.style.display = 'inline-block';
       btnExportCSV.style.display = 'none';
       btnEdit.innerHTML = isEditingData ? '💾 Save' : '✏️ Edit';
       btnEdit.style.background = isEditingData ? 'var(--accent)' : 'transparent';
-      btnEdit.style.color = isEditingData ? '#000000' : 'var(--sub)';
+      btnEdit.style.color = isEditingData ? '#ffffff' : 'var(--text)';
       document.getElementById('suggestionBoard').style.display = 'none';
+      
+      if (query) {
+        displayRows = viewRows.filter(r => 
+          (r.customer && r.customer.toLowerCase().includes(query)) || 
+          (r.displaySize && r.displaySize.toLowerCase().includes(query)) ||
+          (r.size && String(r.size).includes(query))
+        );
+      }
   } else {
       statsBar.style.display = 'flex';
       dataForm.style.display = 'none';
       isEditingData = false;
       if (currentFilter === 'nomatch' && viewRows.length > 0) {
-          actionBlock.style.display = 'block';
+          actionBlock.style.display = 'flex';
           btnBack.style.display = 'none';
           btnEdit.style.display = 'none';
+          searchInput.style.display = 'none';
           btnExportCSV.style.display = 'inline-flex';
+          btnExportCSV.style.marginLeft = 'auto';
       } else {
           actionBlock.style.display = 'none';
       }
@@ -1657,14 +1695,15 @@ function renderTable() {
       <th class="center" onclick="sortTable('cobb')">Cobb <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('moisture')">Moist <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Reels <span class="sort-arrow">↕</span></th>
-      <th class="center">Dia</th>
+      <th class="center" onclick="sortTable('dia')">Dia <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('date')">Date <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
 
-    if(viewRows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="center" style="padding:40px; color:var(--sub);">No orders added yet. Add an order above.</td></tr>`;
+    if(displayRows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="center" style="padding:40px; color:var(--sub);">No orders match.</td></tr>`;
     } else {
-        tbody.innerHTML = viewRows.map(r => {
+        tbody.innerHTML = displayRows.map(r => {
           let custCell = isEditingData ? `<input type="text" class="edit-input" style="width:80px;" value="${r.customer}" onchange="updateData(${r.id}, 'customer', this.value)">` : r.customer;
           let gsmBfCell = isEditingData 
               ? `<input type="number" class="edit-input" style="width:50px; margin-right:4px;" value="${r.gsm}" onchange="updateData(${r.id}, 'gsm', this.value)"> / <input type="number" class="edit-input" style="width:40px; margin-left:4px;" value="${r.bf}" onchange="updateData(${r.id}, 'bf', this.value)">`
@@ -1675,6 +1714,7 @@ function renderTable() {
           let moistCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${r.moisture}" onchange="updateData(${r.id}, 'moisture', this.value)">` : (r.moisture || '-');
           let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:50px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
           let diaCell = isEditingData ? `<input type="text" class="edit-input" style="width:50px;" value="${r.dia}" onchange="updateData(${r.id}, 'dia', this.value)">` : (r.dia || '-');
+          let dateCell = r.date || '-';
             
           return `<tr class="data-row" onmousedown="startPress(${r.id})" onmouseup="endPress()" onmouseleave="endPress()" ontouchstart="startPress(${r.id})" ontouchend="endPress()" oncontextmenu="return false;">
             <td class="center" style="padding:13px 14px;">
@@ -1687,6 +1727,7 @@ function renderTable() {
             <td class="center" style="padding:13px 14px;">${moistCell}</td>
             <td class="center" style="padding:13px 14px;">${reelCell}</td>
             <td class="center" style="padding:13px 14px;">${diaCell}</td>
+            <td class="center" style="padding:13px 14px;">${dateCell}</td>
             <td class="center" id="tons-${r.id}" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
           </tr>`
         }).join('');
@@ -1700,7 +1741,8 @@ function renderTable() {
       <th class="center" onclick="sortTable('cobb')">Cobb <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('moisture')">Moist <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">${setsLabel} <span class="sort-arrow">↕</span></th>
-      <th class="center">Dia</th>
+      <th class="center" onclick="sortTable('dia')">Dia <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('deckle_loss')">Loss % <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
 
@@ -1728,6 +1770,8 @@ function renderTable() {
         gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${maxBfInCombo}</div>`;
       }
 
+      let lossHtml = r._match ? `<div style="font-weight:bold; color:var(--red);">${r.deckle_loss}%</div>` : '-';
+
       return `<tr class="${cls}">
         <td class="customer" style="padding:0; vertical-align:top;">
           <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
@@ -1747,6 +1791,7 @@ function renderTable() {
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.moisture || '-'}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.dia || '-'}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${lossHtml}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
       </tr>`;
     }).join('');
@@ -1766,15 +1811,16 @@ function exportPDF() {
 
       if (viewMode === 'data') {
           title = "Manage Data";
-          head = [['Customer', 'GSM/BF', 'Size', 'Cobb', 'Moist', 'Reels', 'Dia', 'Tons']];
-          body = viewRows.map(r => [r.customer, `${r.gsm}/${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.tons.toFixed(3)]);
+          head = [['Customer', 'GSM/BF', 'Size', 'Cobb', 'Moist', 'Reels', 'Dia', 'Date', 'Tons']];
+          body = viewRows.map(r => [r.customer, `${r.gsm}/${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.date || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
-          head = [['Customer', 'GSM/BF', 'Sizes & Deckle', 'Cobb', 'Moist', currentFilter === 'nomatch' ? 'Reels' : 'Sets', 'Dia', 'Tons']];
+          head = [['Customer', 'GSM/BF', 'Sizes & Deckle', 'Cobb', 'Moist', currentFilter === 'nomatch' ? 'Reels' : 'Sets', 'Dia', 'Loss %', 'Tons']];
           body = viewRows.map(r => {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm}/${r.bf}`;
               let sizeStr = r.displaySize || Number(r._size || r.size).toFixed(2);
+              let lossStr = r._match ? `${r.deckle_loss}%` : '-';
               
               if (r._match && r.comboData) {
                   let groupedCombo = {};
@@ -1788,7 +1834,7 @@ function exportPDF() {
                   let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
                   gsmBfStr = `${r.gsm}/${maxBfInCombo}`;
               }
-              return [custStr, gsmBfStr, sizeStr, r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.tons.toFixed(3)];
+              return [custStr, gsmBfStr, sizeStr, r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', lossStr, r.tons.toFixed(3)];
           });
       }
 
