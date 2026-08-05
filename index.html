@@ -262,6 +262,11 @@
     border-color: var(--accent); 
     color: var(--accent);
   }
+  .btn-data.active {
+    background: rgba(0,85,255,0.1);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
   
   .btn-danger-outline {
     border-color: rgba(255,0,0,0.5); 
@@ -400,21 +405,37 @@
 
   tr.row-nomatch td.size-val { color: var(--red); }
   
+  /* Remove Number Spinner Arrows */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+  }
+  input[type="number"] {
+      -moz-appearance: textfield;
+  }
+
   .edit-input {
     width: 100%;
-    max-width: 80px;
+    min-width: 50px;
     background: var(--surface);
-    border: 1px solid var(--accent);
+    border: 1px solid var(--border);
     color: var(--text);
     border-radius: 6px;
-    padding: 6px;
+    padding: 8px 4px;
     font-size: 14px;
     font-family: var(--sans);
     text-align: center;
+    font-weight: 500;
   }
   .edit-input:focus {
     outline: none;
-    border-color: var(--green);
+    border-color: var(--accent);
+  }
+  .edit-input.cust {
+    min-width: 140px;
+    text-align: left;
+    padding-left: 8px;
   }
 
   .empty {
@@ -626,7 +647,7 @@
       
       <div style="margin-top: 12px;">
         <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:bold; cursor:pointer; color:var(--text);">
-          <input type="checkbox" id="bfToleranceToggle" onchange="saveAppState(); if(allRows.filter(r => r._selected !== false).length > 0) { runMatch(); }" style="width:16px; height:16px; accent-color:var(--accent);">
+          <input type="checkbox" id="bfToleranceToggle" onchange="saveAppState();" style="width:16px; height:16px; accent-color:var(--accent);">
           Allow +/- 2 BF Tolerance
         </label>
       </div>
@@ -687,7 +708,7 @@
     <div class="deckle-info" id="deckleInfo"></div>
   </div>
 
-  <!-- Table -->
+  <!-- Table area -->
   <div class="table-wrap" id="tableWrap">
     <div class="empty" id="emptyState">
       <div class="empty-icon">📂</div>
@@ -703,7 +724,6 @@
         ✏️ Edit
       </button>
       
-      <!-- NEW SEARCH BAR -->
       <input type="text" id="searchInput" placeholder="Search customer or size..." oninput="renderTable()" style="display:none; width: 100%; max-width: 250px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-left: auto; color: var(--text); background: var(--surface);">
       
       <button id="btnExportCSV" class="btn-secondary" onclick="exportUnmatchedExcel()" style="display:none; width: auto; padding: 8px 16px; min-height: 36px; font-size: 12px; font-weight: bold; border-color: var(--green); color: var(--green);">
@@ -1161,7 +1181,7 @@ function showDataPage() {
       ...r,
       tons: calcTons(r.size, r.reel, r.dia)
   }));
-  viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
+  viewRows.sort((a,b) => a.gsm - b.gsm || a.bf - b.bf);
   renderTable();
   if(window.innerWidth > 768) {
     document.querySelector('.main').classList.remove('sidebar-hidden');
@@ -1287,6 +1307,7 @@ function runMatch() {
           moisture: bestCombo[0].moisture,
           reel: sets, 
           dia: bestCombo[0].dia,
+          date: bestCombo[0].date,
           deckle_loss: lossPct.toFixed(2),
           tons: calcTons(totalSize, sets, bestCombo[0].dia),
           _match: true
@@ -1526,7 +1547,8 @@ function setFilter(f) {
   if(viewMode === 'data') return;
   viewMode = 'match';
   currentFilter = f;
-  let setsLabel = currentFilter === 'nomatch' ? 'Reels' : 'Sets';
+  
+  // Manage pills UI
   document.querySelectorAll('.pill').forEach(p => {
     p.className = 'pill';
     if (p.dataset.filter === f) {
@@ -1535,6 +1557,7 @@ function setFilter(f) {
       if (f === 'nomatch') p.classList.add('active-nomatch');
     }
   });
+  
   if (matchRows.length) applyFilter(f);
   saveAppState();
 }
@@ -1544,14 +1567,8 @@ function applyFilter(f) {
   else if (f === 'nomatch') viewRows = matchRows.filter(r => !r._match);
   else viewRows = [...matchRows];
   
-  if (f === 'match') {
-    viewRows.sort((a, b) => {
-      if (b.reel !== a.reel) return b.reel - a.reel; 
-      return b._size - a._size; 
-    });
-  } else {
-    viewRows.sort((a, b) => b._size - a._size);
-  }
+  viewRows.sort((a, b) => a.gsm - b.gsm || a.bf - b.bf);
+  
   renderTable();
 }
 
@@ -1582,6 +1599,7 @@ function exportUnmatchedExcel() {
   if (!viewRows.length || currentFilter !== 'nomatch') return;
   try {
       let exportData = viewRows.map(r => ({
+          "Date": r.date || '-',
           "Customer": r.customer,
           "GSM": r.gsm,
           "BF": r.bf,
@@ -1590,7 +1608,6 @@ function exportUnmatchedExcel() {
           "Moisture": r.moisture || '-',
           "Reels": r.reel,
           "Dia": r.dia || '-',
-          "Date": r.date || '-',
           "Tons": Number(r.tons.toFixed(3))
       }));
       let ws = XLSX.utils.json_to_sheet(exportData);
@@ -1615,6 +1632,7 @@ function renderTable() {
   const btnEdit = document.getElementById('btnEditData');
   const btnExportCSV = document.getElementById('btnExportCSV');
   const searchInput = document.getElementById('searchInput');
+  const btnData = document.querySelector('.btn-data');
 
   if (!allRows.length && viewMode !== 'data') {
     table.style.display = 'none';
@@ -1645,6 +1663,8 @@ function renderTable() {
       btnEdit.style.color = isEditingData ? '#ffffff' : 'var(--text)';
       document.getElementById('suggestionBoard').style.display = 'none';
       
+      if(btnData) btnData.classList.add('active');
+      
       if (query) {
         displayRows = viewRows.filter(r => 
           (r.customer && r.customer.toLowerCase().includes(query)) || 
@@ -1666,6 +1686,8 @@ function renderTable() {
       } else {
           actionBlock.style.display = 'none';
       }
+      
+      if(btnData) btnData.classList.remove('active');
   }
   
   if (viewMode !== 'data') {
@@ -1689,6 +1711,7 @@ function renderTable() {
       <th class="center" style="width:50px;">
          <input type="checkbox" ${allSelected ? 'checked' : ''} onchange="toggleAllSelection(this.checked)" style="width:18px;height:18px;accent-color:var(--accent);">
       </th>
+      <th class="center" onclick="sortTable('date')">Date <span class="sort-arrow">↕</span></th>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
@@ -1696,7 +1719,6 @@ function renderTable() {
       <th class="center" onclick="sortTable('moisture')">Moist <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Reels <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('dia')">Dia <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('date')">Date <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
 
@@ -1704,22 +1726,23 @@ function renderTable() {
         tbody.innerHTML = `<tr><td colspan="10" class="center" style="padding:40px; color:var(--sub);">No orders match.</td></tr>`;
     } else {
         tbody.innerHTML = displayRows.map(r => {
-          let custCell = isEditingData ? `<input type="text" class="edit-input" style="width:80px;" value="${r.customer}" onchange="updateData(${r.id}, 'customer', this.value)">` : r.customer;
+          let dateCell = r.date || '-';
+          let custCell = isEditingData ? `<input type="text" class="edit-input cust" value="${r.customer}" onchange="updateData(${r.id}, 'customer', this.value)">` : r.customer;
           let gsmBfCell = isEditingData 
-              ? `<input type="number" class="edit-input" style="width:50px; margin-right:4px;" value="${r.gsm}" onchange="updateData(${r.id}, 'gsm', this.value)"> / <input type="number" class="edit-input" style="width:40px; margin-left:4px;" value="${r.bf}" onchange="updateData(${r.id}, 'bf', this.value)">`
+              ? `<div style="display:flex; align-items:center; justify-content:center; gap:4px;"><input type="number" class="edit-input" style="width:50px; min-width:40px;" value="${r.gsm}" onchange="updateData(${r.id}, 'gsm', this.value)"> <span>/</span> <input type="number" class="edit-input" style="width:50px; min-width:40px;" value="${r.bf}" onchange="updateData(${r.id}, 'bf', this.value)"></div>`
               : `${r.gsm} / ${r.bf}`;
           let safeSizeVal = String(r.displaySize || Number(r.size).toFixed(2)).replace(/"/g, '&quot;');
-          let sizeCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${safeSizeVal}" onchange="updateData(${r.id}, 'size', this.value)">` : (r.displaySize || Number(r.size).toFixed(2));
+          let sizeCell = isEditingData ? `<input type="text" class="edit-input" style="width:70px;" value="${safeSizeVal}" onchange="updateData(${r.id}, 'size', this.value)">` : (r.displaySize || Number(r.size).toFixed(2));
           let cobbCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${r.cobb}" onchange="updateData(${r.id}, 'cobb', this.value)">` : (r.cobb || '-');
           let moistCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${r.moisture}" onchange="updateData(${r.id}, 'moisture', this.value)">` : (r.moisture || '-');
-          let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:50px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
-          let diaCell = isEditingData ? `<input type="text" class="edit-input" style="width:50px;" value="${r.dia}" onchange="updateData(${r.id}, 'dia', this.value)">` : (r.dia || '-');
-          let dateCell = r.date || '-';
+          let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:60px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
+          let diaCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${r.dia}" onchange="updateData(${r.id}, 'dia', this.value)">` : (r.dia || '-');
             
           return `<tr class="data-row" onmousedown="startPress(${r.id})" onmouseup="endPress()" onmouseleave="endPress()" ontouchstart="startPress(${r.id})" ontouchend="endPress()" oncontextmenu="return false;">
             <td class="center" style="padding:13px 14px;">
               <input type="checkbox" ${r._selected !== false ? 'checked' : ''} onchange="toggleSelection(${r.id}, this.checked)" style="width:18px;height:18px;accent-color:var(--accent);">
             </td>
+            <td class="center" style="padding:13px 14px;">${dateCell}</td>
             <td class="customer" style="padding:13px 14px;">${custCell}</td>
             <td class="center" style="padding:13px 14px;">${gsmBfCell}</td>
             <td class="size-val center" style="padding:13px 14px;">${sizeCell}</td>
@@ -1727,7 +1750,6 @@ function renderTable() {
             <td class="center" style="padding:13px 14px;">${moistCell}</td>
             <td class="center" style="padding:13px 14px;">${reelCell}</td>
             <td class="center" style="padding:13px 14px;">${diaCell}</td>
-            <td class="center" style="padding:13px 14px;">${dateCell}</td>
             <td class="center" id="tons-${r.id}" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
           </tr>`
         }).join('');
@@ -1735,6 +1757,7 @@ function renderTable() {
   } else {
     let setsLabel = currentFilter === 'nomatch' ? 'Reels' : 'Sets';
     thead.innerHTML = `<tr>
+      <th class="center" onclick="sortTable('date')">Date <span class="sort-arrow">↕</span></th>
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Sizes & Deckle <span class="sort-arrow">↕</span></th>
@@ -1742,8 +1765,8 @@ function renderTable() {
       <th class="center" onclick="sortTable('moisture')">Moist <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">${setsLabel} <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('dia')">Dia <span class="sort-arrow">↕</span></th>
-      <th class="center" onclick="sortTable('deckle_loss')">Loss % <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
+      ${currentFilter !== 'nomatch' ? `<th class="center" onclick="sortTable('deckle_loss')">Loss % <span class="sort-arrow">↕</span></th>` : ''}
     </tr>`;
 
     tbody.innerHTML = viewRows.map(r => {
@@ -1770,9 +1793,10 @@ function renderTable() {
         gsmBfHtml = `<div style="padding:13px 14px;">${r.gsm} / ${maxBfInCombo}</div>`;
       }
 
-      let lossHtml = r._match ? `<div style="font-weight:bold; color:var(--red);">${r.deckle_loss}%</div>` : '-';
+      let lossHtml = r._match ? `<td class="center" style="vertical-align:middle; padding:13px 14px; font-weight:bold; color:var(--red);">${r.deckle_loss}%</td>` : '';
 
       return `<tr class="${cls}">
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.date || '-'}</td>
         <td class="customer" style="padding:0; vertical-align:top;">
           <div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
             ${custHtml}
@@ -1791,8 +1815,8 @@ function renderTable() {
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.moisture || '-'}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.dia || '-'}</td>
-        <td class="center" style="vertical-align:middle; padding:13px 14px;">${lossHtml}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
+        ${lossHtml}
       </tr>`;
     }).join('');
     
@@ -1811,16 +1835,21 @@ function exportPDF() {
 
       if (viewMode === 'data') {
           title = "Manage Data";
-          head = [['Customer', 'GSM/BF', 'Size', 'Cobb', 'Moist', 'Reels', 'Dia', 'Date', 'Tons']];
-          body = viewRows.map(r => [r.customer, `${r.gsm}/${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.date || '-', r.tons.toFixed(3)]);
+          head = [['Date', 'Customer', 'GSM/BF', 'Size', 'Cobb', 'Moist', 'Reels', 'Dia', 'Tons']];
+          body = viewRows.map(r => [r.date || '-', r.customer, `${r.gsm}/${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
-          head = [['Customer', 'GSM/BF', 'Sizes & Deckle', 'Cobb', 'Moist', currentFilter === 'nomatch' ? 'Reels' : 'Sets', 'Dia', 'Loss %', 'Tons']];
+          
+          if (currentFilter === 'nomatch') {
+              head = [['Date', 'Customer', 'GSM/BF', 'Sizes & Deckle', 'Cobb', 'Moist', 'Reels', 'Dia', 'Tons']];
+          } else {
+              head = [['Date', 'Customer', 'GSM/BF', 'Sizes & Deckle', 'Cobb', 'Moist', 'Sets', 'Dia', 'Tons', 'Loss %']];
+          }
+          
           body = viewRows.map(r => {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm}/${r.bf}`;
               let sizeStr = r.displaySize || Number(r._size || r.size).toFixed(2);
-              let lossStr = r._match ? `${r.deckle_loss}%` : '-';
               
               if (r._match && r.comboData) {
                   let groupedCombo = {};
@@ -1834,7 +1863,14 @@ function exportPDF() {
                   let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
                   gsmBfStr = `${r.gsm}/${maxBfInCombo}`;
               }
-              return [custStr, gsmBfStr, sizeStr, r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', lossStr, r.tons.toFixed(3)];
+              
+              let rowData = [r.date || '-', custStr, gsmBfStr, sizeStr, r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.tons.toFixed(3)];
+              
+              if (currentFilter !== 'nomatch') {
+                  rowData.push(r._match ? `${r.deckle_loss}%` : '-');
+              }
+              
+              return rowData;
           });
       }
 
