@@ -611,6 +611,15 @@
     <div>
       <div class="sec-label">2 · Select Deckle Range</div>
       <select id="deckleSelect" onchange="saveAppState()"></select>
+      
+      <!-- NEW BF TOLERANCE TOGGLE -->
+      <div style="margin-top: 12px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:bold; cursor:pointer; color:var(--text);">
+          <input type="checkbox" id="bfToleranceToggle" onchange="saveAppState(); if(allRows.filter(r => r._selected !== false).length > 0) { runMatch(); }" style="width:16px; height:16px; accent-color:var(--accent);">
+          Allow +/- 2 BF Tolerance
+        </label>
+      </div>
+
     </div>
 
     <div>
@@ -810,7 +819,8 @@ function saveAppState() {
     loadedFiles: loadedFiles,
     currentFilter: currentFilter,
     viewMode: viewMode,
-    selectedDeckleIndex: document.getElementById('deckleSelect') ? document.getElementById('deckleSelect').value : 0
+    selectedDeckleIndex: document.getElementById('deckleSelect') ? document.getElementById('deckleSelect').value : 0,
+    bfTolerance: document.getElementById('bfToleranceToggle') ? document.getElementById('bfToleranceToggle').checked : false
   };
   try {
     localStorage.setItem('deckleAppState', JSON.stringify(state));
@@ -831,6 +841,10 @@ function restoreAppState() {
   
   if (savedState.selectedDeckleIndex !== undefined && document.getElementById('deckleSelect')) {
     document.getElementById('deckleSelect').value = savedState.selectedDeckleIndex;
+  }
+  
+  if (savedState.bfTolerance !== undefined && document.getElementById('bfToleranceToggle')) {
+    document.getElementById('bfToleranceToggle').checked = savedState.bfTolerance;
   }
   
   document.getElementById('uploadZone').style.display = 'none';
@@ -1121,12 +1135,16 @@ function showDataPage() {
   saveAppState();
 }
 
+// ── MATCHING ENGINE ──
 function runMatch() {
   let activeRows = allRows.filter(r => r._selected !== false);
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
   const idx  = parseInt(document.getElementById('deckleSelect').value);
   const rule = rules[idx];
   if (!rule) { toast('Please select a deckle range', true); return; }
+
+  // Check if BF tolerance is enabled via the UI toggle
+  const bfTol = document.getElementById('bfToleranceToggle') && document.getElementById('bfToleranceToggle').checked ? 2 : 0;
 
   viewMode = 'match';
   matchRows = [];
@@ -1186,7 +1204,8 @@ function runMatch() {
 
           let newMinBf = Math.min(minBf, item.bf);
           let newMaxBf = Math.max(maxBf, item.bf);
-          if (newMaxBf - newMinBf > 2) continue;
+          // Apply dynamic BF tolerance based on user toggle
+          if (newMaxBf - newMinBf > bfTol) continue;
 
           currentCombo.push(item);
           usedCounts[item.id] = countUsed + 1;
@@ -1317,6 +1336,9 @@ function updateSuggestionBoard() {
   const rule = rules[idx];
   if (!rule) return;
 
+  // Check if BF tolerance is enabled via the UI toggle
+  const bfTol = document.getElementById('bfToleranceToggle') && document.getElementById('bfToleranceToggle').checked ? 2 : 0;
+
   let groups = {};
   viewRows.forEach(row => {
     let key = `${row.gsm}_${row.dia}`;
@@ -1339,7 +1361,8 @@ function updateSuggestionBoard() {
 
     let evaluateSubset = (sub) => {
       let bfs = sub.map(c => c.bf);
-      if (Math.max(...bfs) - Math.min(...bfs) > 2) return null;
+      // Apply dynamic BF tolerance based on user toggle
+      if (Math.max(...bfs) - Math.min(...bfs) > bfTol) return null;
 
       let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
       let gap = rule.min - subTotal;
