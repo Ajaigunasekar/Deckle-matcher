@@ -14,13 +14,13 @@
     --card:      #ffffff;
     --card2:     #eef2f6;
     --border:    #d3dce6;
-    --accent:    #0055ff; /* Brighter, high-contrast blue */
+    --accent:    #0055ff; 
     --accent-d:  #0033cc;
     --green:     #10b981;
-    --red:       #ff0000; /* Pure bright red */
+    --red:       #ff0000; 
     --amber:     #f59e0b;
-    --text:      #000000; /* Pure Black */
-    --sub:       #000000; /* Pure Black */
+    --text:      #000000; 
+    --sub:       #000000; 
     --mono:      "Courier New", Courier, monospace;
     --sans:      -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --radius:    14px;
@@ -138,15 +138,15 @@
     transition: border-color 0.2s, background 0.2s;
     position: relative;
   }
-  .upload-zone:active, .upload-zone.drag { border-color: var(--accent); background: rgba(79,142,247,0.06); }
+  .upload-zone:active, .upload-zone.drag { border-color: var(--accent); background: rgba(0,85,255,0.06); }
   .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; z-index: 10; }
   .upload-icon { font-size: 28px; margin-bottom: 8px; }
   .upload-text { font-size: 13px; color: #000000; font-weight: 500; }
   .upload-text b { color: var(--accent); font-weight: bold; }
   
   .file-loaded-block {
-    background: rgba(62,207,142,0.05);
-    border: 1px solid rgba(62,207,142,0.3);
+    background: rgba(16,185,129,0.05);
+    border: 1px solid rgba(16,185,129,0.3);
     border-radius: var(--radius-sm);
     padding: 12px;
     display: flex;
@@ -346,7 +346,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
-    min-width: 600px;
+    min-width: 900px; /* Widened slightly to accommodate new columns */
   }
   thead th {
     font-family: var(--mono);
@@ -517,7 +517,7 @@
   
   .data-form-grid {
     display: grid; 
-    grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; 
+    grid-template-columns: 1.5fr 1fr 1fr 1.5fr 1fr 1fr 1fr 1fr; 
     gap: 8px; 
     margin-bottom: 12px;
   }
@@ -542,6 +542,11 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  @media (max-width: 1024px) {
+    .data-form-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    .data-form-grid > *:first-child { grid-column: 1 / -1; }
+  }
+
   @media (max-width: 768px) {
     .main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; height: auto; }
     .main.sidebar-hidden .sidebar {
@@ -562,7 +567,6 @@
     .logo { font-size: 18px; }
     .logo-sub { display: none; }
     .data-form-grid { grid-template-columns: 1fr 1fr; }
-    .data-form-grid > *:first-child { grid-column: 1 / -1; }
   }
 </style>
 </head>
@@ -612,7 +616,6 @@
       <div class="sec-label">2 · Select Deckle Range</div>
       <select id="deckleSelect" onchange="saveAppState()"></select>
       
-      <!-- NEW BF TOLERANCE TOGGLE -->
       <div style="margin-top: 12px;">
         <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:bold; cursor:pointer; color:var(--text);">
           <input type="checkbox" id="bfToleranceToggle" onchange="saveAppState(); if(allRows.filter(r => r._selected !== false).length > 0) { runMatch(); }" style="width:16px; height:16px; accent-color:var(--accent);">
@@ -704,6 +707,8 @@
             <input type="number" id="addGsm" placeholder="GSM">
             <input type="number" id="addBf" placeholder="BF">
             <input type="text" id="addSize" placeholder="Size (e.g. 100 or 39&quot;)">
+            <input type="text" id="addCobb" placeholder="Cobb">
+            <input type="text" id="addMoisture" placeholder="Moisture">
             <input type="number" id="addReel" placeholder="Reels">
             <input type="text" id="addDia" placeholder="Dia">
         </div>
@@ -958,8 +963,10 @@ function handleFile(input, isAppend) {
         let parsed = parseSizeInput(sizeRaw);
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
         let dia = getVal(['dia', 'shade']) || '-';
+        let cobb = String(getVal(['cobb']) || '-').trim();
+        let moisture = String(getVal(['moist', 'moisture']) || '-').trim();
         
-        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, reel, dia: String(dia), fileName: currentFileName, _selected: true };
+        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, cobb, moisture, reel, dia: String(dia), fileName: currentFileName, _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       if (isAppend) {
@@ -1018,9 +1025,9 @@ function updateData(id, field, value) {
     let vRow = viewRows.find(r => r.id === id);
     
     if (row) {
-        if (field === 'customer' || field === 'dia') {
-            row[field] = value;
-            if(vRow) vRow[field] = value;
+        if (field === 'customer' || field === 'dia' || field === 'cobb' || field === 'moisture') {
+            row[field] = String(value).trim();
+            if(vRow) vRow[field] = String(value).trim();
         } else if (field === 'size') {
             let parsed = parseSizeInput(value);
             row.size = parsed.size;
@@ -1069,6 +1076,8 @@ function addManualOrder() {
   let gsm = parseFloat(document.getElementById('addGsm').value) || 0;
   let bf = parseFloat(document.getElementById('addBf').value) || 0;
   let sizeRaw = document.getElementById('addSize').value;
+  let cobb = document.getElementById('addCobb').value.trim() || '-';
+  let moisture = document.getElementById('addMoisture').value.trim() || '-';
   let reel = parseFloat(document.getElementById('addReel').value) || 0;
   let dia = document.getElementById('addDia').value.trim() || '-';
 
@@ -1095,6 +1104,8 @@ function addManualOrder() {
     bf: bf,
     size: parsed.size,
     displaySize: parsed.displaySize,
+    cobb: cobb,
+    moisture: moisture,
     reel: reel,
     dia: String(dia),
     fileName: 'Manual Entry',
@@ -1105,6 +1116,8 @@ function addManualOrder() {
   document.getElementById('addGsm').value = '';
   document.getElementById('addBf').value = '';
   document.getElementById('addSize').value = '';
+  document.getElementById('addCobb').value = '';
+  document.getElementById('addMoisture').value = '';
   document.getElementById('addReel').value = '';
   document.getElementById('addDia').value = '';
 
@@ -1135,7 +1148,7 @@ function showDataPage() {
   saveAppState();
 }
 
-// ── MATCHING ENGINE ──
+// ── MATCHING ENGINE: Strict Dia, Cobb, Moist & Dynamic BF Tolerance ──
 function runMatch() {
   let activeRows = allRows.filter(r => r._selected !== false);
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
@@ -1143,7 +1156,6 @@ function runMatch() {
   const rule = rules[idx];
   if (!rule) { toast('Please select a deckle range', true); return; }
 
-  // Check if BF tolerance is enabled via the UI toggle
   const bfTol = document.getElementById('bfToleranceToggle') && document.getElementById('bfToleranceToggle').checked ? 2 : 0;
 
   viewMode = 'match';
@@ -1200,11 +1212,14 @@ function runMatch() {
           let countUsed = usedCounts[item.id] || 0;
           if (item.reel < countUsed + 1) continue;
           
-          if (currentCombo.length > 0 && item.dia !== currentCombo[0].dia) continue;
+          if (currentCombo.length > 0) {
+             if (item.dia !== currentCombo[0].dia) continue;
+             if (item.cobb !== currentCombo[0].cobb) continue;
+             if (item.moisture !== currentCombo[0].moisture) continue;
+          }
 
           let newMinBf = Math.min(minBf, item.bf);
           let newMaxBf = Math.max(maxBf, item.bf);
-          // Apply dynamic BF tolerance based on user toggle
           if (newMaxBf - newMinBf > bfTol) continue;
 
           currentCombo.push(item);
@@ -1247,6 +1262,8 @@ function runMatch() {
           bf: bestCombo[0].bf,
           _size: totalSize,
           combo_str: sizeEquation,
+          cobb: bestCombo[0].cobb,
+          moisture: bestCombo[0].moisture,
           reel: sets, 
           dia: bestCombo[0].dia,
           tons: calcTons(totalSize, sets, bestCombo[0].dia),
@@ -1336,12 +1353,11 @@ function updateSuggestionBoard() {
   const rule = rules[idx];
   if (!rule) return;
 
-  // Check if BF tolerance is enabled via the UI toggle
   const bfTol = document.getElementById('bfToleranceToggle') && document.getElementById('bfToleranceToggle').checked ? 2 : 0;
 
   let groups = {};
   viewRows.forEach(row => {
-    let key = `${row.gsm}_${row.dia}`;
+    let key = `${row.gsm}_${row.dia}_${row.cobb}_${row.moisture}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(row);
   });
@@ -1361,7 +1377,6 @@ function updateSuggestionBoard() {
 
     let evaluateSubset = (sub) => {
       let bfs = sub.map(c => c.bf);
-      // Apply dynamic BF tolerance based on user toggle
       if (Math.max(...bfs) - Math.min(...bfs) > bfTol) return null;
 
       let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
@@ -1376,6 +1391,8 @@ function updateSuggestionBoard() {
       let gsm = sub[0].gsm;
       let maxBf = Math.max(...sub.map(c => c.bf));
       let dia = sub[0].dia;
+      let cobb = sub[0].cobb;
+      let moisture = sub[0].moisture;
 
       let counts = {};
       sub.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
@@ -1398,7 +1415,7 @@ function updateSuggestionBoard() {
 
         return {
           html: `<div class="suggestion-item">
-            <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
+            <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia} &nbsp;|&nbsp; Cobb ${cobb} &nbsp;|&nbsp; Moist ${moisture}</div>
             <span style="color:#0055ff; font-family:var(--mono); font-size:14px; font-weight:bold;">${comboStr}</span> <span style="color:#0055ff; font-size:14px; font-weight:bold;">= ${formatSize(subTotal)}</span><br>
             ↳ Ask need: <b style="color:#ff0000;">${needStr} (${neededReels} reels)</b>
           </div>`,
@@ -1411,7 +1428,7 @@ function updateSuggestionBoard() {
 
         return {
           html: `<div class="suggestion-item">
-            <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
+            <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia} &nbsp;|&nbsp; Cobb ${cobb} &nbsp;|&nbsp; Moist ${moisture}</div>
             <span style="color:#0055ff; font-family:var(--mono); font-size:14px; font-weight:bold;">${comboStr}</span> <span style="color:#0055ff; font-size:14px; font-weight:bold;">= ${formatSize(subTotal)}</span><br>
             ↳ Ask need: <b style="color:#ff0000;">${needStr} (${neededReels} reel${neededReels > 1 ? 's' : ''})</b>
           </div>`,
@@ -1547,6 +1564,8 @@ function exportUnmatchedExcel() {
           "GSM": r.gsm,
           "BF": r.bf,
           "Size": r.displaySize || Number(r.size).toFixed(2),
+          "Cobb": r.cobb || '-',
+          "Moisture": r.moisture || '-',
           "Reels": r.reel,
           "Dia": r.dia || '-',
           "Tons": Number(r.tons.toFixed(3))
@@ -1635,13 +1654,15 @@ function renderTable() {
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Size <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('cobb')">Cobb <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('moisture')">Moist <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">Reels <span class="sort-arrow">↕</span></th>
       <th class="center">Dia</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
     </tr>`;
 
     if(viewRows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="center" style="padding:40px; color:var(--sub);">No orders added yet. Add an order above.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="center" style="padding:40px; color:var(--sub);">No orders added yet. Add an order above.</td></tr>`;
     } else {
         tbody.innerHTML = viewRows.map(r => {
           let custCell = isEditingData ? `<input type="text" class="edit-input" style="width:80px;" value="${r.customer}" onchange="updateData(${r.id}, 'customer', this.value)">` : r.customer;
@@ -1650,6 +1671,8 @@ function renderTable() {
               : `${r.gsm} / ${r.bf}`;
           let safeSizeVal = String(r.displaySize || Number(r.size).toFixed(2)).replace(/"/g, '&quot;');
           let sizeCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${safeSizeVal}" onchange="updateData(${r.id}, 'size', this.value)">` : (r.displaySize || Number(r.size).toFixed(2));
+          let cobbCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${r.cobb}" onchange="updateData(${r.id}, 'cobb', this.value)">` : (r.cobb || '-');
+          let moistCell = isEditingData ? `<input type="text" class="edit-input" style="width:60px;" value="${r.moisture}" onchange="updateData(${r.id}, 'moisture', this.value)">` : (r.moisture || '-');
           let reelCell = isEditingData ? `<input type="number" class="edit-input" style="width:50px;" value="${r.reel}" onchange="updateData(${r.id}, 'reel', this.value)">` : r.reel;
           let diaCell = isEditingData ? `<input type="text" class="edit-input" style="width:50px;" value="${r.dia}" onchange="updateData(${r.id}, 'dia', this.value)">` : (r.dia || '-');
             
@@ -1660,6 +1683,8 @@ function renderTable() {
             <td class="customer" style="padding:13px 14px;">${custCell}</td>
             <td class="center" style="padding:13px 14px;">${gsmBfCell}</td>
             <td class="size-val center" style="padding:13px 14px;">${sizeCell}</td>
+            <td class="center" style="padding:13px 14px;">${cobbCell}</td>
+            <td class="center" style="padding:13px 14px;">${moistCell}</td>
             <td class="center" style="padding:13px 14px;">${reelCell}</td>
             <td class="center" style="padding:13px 14px;">${diaCell}</td>
             <td class="center" id="tons-${r.id}" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
@@ -1672,6 +1697,8 @@ function renderTable() {
       <th onclick="sortTable('customer')">Customer <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('gsm')">GSM / BF <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('size')">Sizes & Deckle <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('cobb')">Cobb <span class="sort-arrow">↕</span></th>
+      <th class="center" onclick="sortTable('moisture')">Moist <span class="sort-arrow">↕</span></th>
       <th class="center" onclick="sortTable('reel')">${setsLabel} <span class="sort-arrow">↕</span></th>
       <th class="center">Dia</th>
       <th class="center" onclick="sortTable('tons')">Tons <span class="sort-arrow">↕</span></th>
@@ -1716,6 +1743,8 @@ function renderTable() {
           ${r._match && r.combo_str ? `<div style="font-size:16px; color:var(--accent); margin-bottom:8px; font-weight:900; letter-spacing:0.5px; background:rgba(0,85,255,0.1); padding:6px 10px; border-radius:6px; display:inline-block; border: 1px solid rgba(0,85,255,0.3);">${r.combo_str}</div>` : ''}
           <div style="font-size:16px; font-weight:bold; color:var(--green);">${r._match ? Number(r._size).toFixed(2) : (r.displaySize || Number(r.size).toFixed(2))}</div>
         </td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.cobb || '-'}</td>
+        <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.moisture || '-'}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.reel}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px;">${r.dia || '-'}</td>
         <td class="center" style="vertical-align:middle; padding:13px 14px; font-family:var(--mono); font-weight:bold; color:var(--accent);">${r.tons.toFixed(3)}</td>
@@ -1737,14 +1766,14 @@ function exportPDF() {
 
       if (viewMode === 'data') {
           title = "Manage Data";
-          head = [['Customer', 'GSM / BF', 'Size', 'Reels', 'Dia', 'Tons']];
-          body = viewRows.map(r => [r.customer, `${r.gsm} / ${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.reel, r.dia || '-', r.tons.toFixed(3)]);
+          head = [['Customer', 'GSM/BF', 'Size', 'Cobb', 'Moist', 'Reels', 'Dia', 'Tons']];
+          body = viewRows.map(r => [r.customer, `${r.gsm}/${r.bf}`, r.displaySize || Number(r.size).toFixed(2), r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.tons.toFixed(3)]);
       } else {
           title = currentFilter === 'match' ? "Matched Results" : (currentFilter === 'nomatch' ? "No Match / Remaining" : "All Results");
-          head = [['Customer', 'GSM / BF', 'Sizes & Deckle', currentFilter === 'nomatch' ? 'Reels' : 'Sets', 'Dia', 'Tons']];
+          head = [['Customer', 'GSM/BF', 'Sizes & Deckle', 'Cobb', 'Moist', currentFilter === 'nomatch' ? 'Reels' : 'Sets', 'Dia', 'Tons']];
           body = viewRows.map(r => {
               let custStr = r.customer;
-              let gsmBfStr = `${r.gsm} / ${r.bf}`;
+              let gsmBfStr = `${r.gsm}/${r.bf}`;
               let sizeStr = r.displaySize || Number(r._size || r.size).toFixed(2);
               
               if (r._match && r.comboData) {
@@ -1757,9 +1786,9 @@ function exportPDF() {
                   custStr = uniqueItems.map(c => `${c.customer} [${c.displaySize || Number(r.size).toFixed(2)}] (${c.count * r.reel})`).join('\n');
                   sizeStr = r.combo_str ? `${r.combo_str}\nTotal: ${Number(r._size).toFixed(2)}` : `${Number(r._size).toFixed(2)}`;
                   let maxBfInCombo = Math.max(...r.comboData.map(c => c.bf));
-                  gsmBfStr = `${r.gsm} / ${maxBfInCombo}`;
+                  gsmBfStr = `${r.gsm}/${maxBfInCombo}`;
               }
-              return [custStr, gsmBfStr, sizeStr, r.reel, r.dia || '-', r.tons.toFixed(3)];
+              return [custStr, gsmBfStr, sizeStr, r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.tons.toFixed(3)];
           });
       }
 
