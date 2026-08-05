@@ -768,16 +768,18 @@
 function parseSizeInput(valStr) {
     if (!valStr) return { size: 0, displaySize: '0' };
     let str = String(valStr).toLowerCase().trim();
-    
-    // Support commas as decimals
     str = str.replace(',', '.');
-    
     let isInch = str.includes('"') || str.includes('”') || str.includes('“') || str.includes('″') || str.includes("'") || str.includes('’') || str.includes('‘') || str.includes('in');
     let num = parseFloat(str.replace(/[^\d.-]/g, '')) || 0;
     if (isInch && num > 0) {
         return { size: num * 2.54, displaySize: num + '"' };
     }
     return { size: num, displaySize: num > 0 ? num.toFixed(2) : '0' };
+}
+
+function calcTons(size, reel, dia) {
+    let multiplier = String(dia).trim().includes('1000') ? 12.5 : 12.2;
+    return (size / 2.54 * multiplier * reel) / 1000;
 }
 
 function toggleSidebar() {
@@ -1014,12 +1016,12 @@ function updateData(id, field, value) {
             row[field] = parseFloat(value) || 0;
             if(vRow) vRow[field] = parseFloat(value) || 0;
         }
-        row.tons = (row.size / 2.54 * 12.2 * row.reel) / 1000;
+        row.tons = calcTons(row.size, row.reel, row.dia);
         if(vRow) vRow.tons = row.tons;
     }
     
     let activeRows = allRows.filter(r => r._selected !== false);
-    let sumAllOrderTons = activeRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
+    let sumAllOrderTons = activeRows.reduce((sum, r) => sum + calcTons(r.size, r.reel, r.dia), 0);
     document.getElementById('statOrderTons').textContent = sumAllOrderTons.toFixed(3);
     
     let tonsCell = document.getElementById(`tons-${id}`);
@@ -1109,7 +1111,7 @@ function showDataPage() {
   document.querySelectorAll('.pills .pill').forEach(p => p.className = 'pill');
   viewRows = [...allRows].map(r => ({
       ...r,
-      tons: (r.size / 2.54 * 12.2 * r.reel) / 1000
+      tons: calcTons(r.size, r.reel, r.dia)
   }));
   viewRows.sort((a,b) => b.gsm - a.gsm || b.bf - a.bf);
   renderTable();
@@ -1119,7 +1121,6 @@ function showDataPage() {
   saveAppState();
 }
 
-// ── MATCHING ENGINE: Prioritizes combining checked rows into full sets ──
 function runMatch() {
   let activeRows = allRows.filter(r => r._selected !== false);
   if (!activeRows.length) { toast('Please add/select data first', true); return; }
@@ -1229,7 +1230,7 @@ function runMatch() {
           combo_str: sizeEquation,
           reel: sets, 
           dia: bestCombo[0].dia,
-          tons: (totalSize / 2.54 * 12.2 * sets) / 1000,
+          tons: calcTons(totalSize, sets, bestCombo[0].dia),
           _match: true
         });
       } else {
@@ -1248,7 +1249,7 @@ function runMatch() {
               ...item,
               _size: item.size,
               displaySize: item.displaySize,
-              tons: (item.size / 2.54 * 12.2 * item.reel) / 1000,
+              tons: calcTons(item.size, item.reel, item.dia),
               _match: false
            });
         }
@@ -1303,7 +1304,6 @@ function clearMatchedData() {
   saveAppState();
 }
 
-// ── REFINED SUGGESTION ENGINE: Clean UI & Continuous Coverage ──
 function updateSuggestionBoard() {
   const board = document.getElementById('suggestionBoard');
   const list = document.getElementById('suggestionList');
@@ -1343,7 +1343,7 @@ function updateSuggestionBoard() {
 
       let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
       let gap = rule.min - subTotal;
-      if (gap < 65) return null; // STRICT RULE: Ignore gaps under 65 cm
+      if (gap < 65) return null; 
 
       let minNeed = rule.min - subTotal;
       let maxNeed = rule.max - subTotal;
@@ -1354,7 +1354,6 @@ function updateSuggestionBoard() {
       let maxBf = Math.max(...sub.map(c => c.bf));
       let dia = sub[0].dia;
 
-      // Calculate sets available strictly from remaining selected inventory
       let counts = {};
       sub.forEach(c => { counts[c.id] = (counts[c.id] || 0) + 1; });
       let sets = Math.min(...Object.keys(counts).map(id => {
@@ -1363,27 +1362,40 @@ function updateSuggestionBoard() {
       }));
       if (sets < 1) sets = 1;
 
-      // STRICT RULE: If the needed gap is 150 cm or above, divide it until it drops below 150 cm.
-      let parts = 1;
-      while ((minNeed / parts) >= 150) {
-        parts++;
+      if (minNeed >= 150) {
+        let parts = 1;
+        while ((minNeed / parts) >= 150) {
+          parts++;
+        }
+        let reqMin = minNeed / parts;
+        let reqMax = maxNeed / parts;
+        let neededReels = sets * parts;
+
+        let needStr = toRangeStr(reqMin, reqMax);
+
+        return {
+          html: `<div class="suggestion-item">
+            <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
+            <span style="color:#0055ff; font-family:var(--mono); font-size:14px; font-weight:bold;">${comboStr}</span> <span style="color:#0055ff; font-size:14px; font-weight:bold;">= ${formatSize(subTotal)}</span><br>
+            ↳ Ask need: <b style="color:#ff0000;">${needStr} (${neededReels} reels)</b>
+          </div>`,
+          usedIds: sub.map(c => c.id),
+          setsConsumed: sets
+        };
+      } else {
+        let neededReels = Math.max(1, Math.round(minNeed / sub[0].size));
+        let needStr = toRangeStr(minNeed, maxNeed);
+
+        return {
+          html: `<div class="suggestion-item">
+            <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
+            <span style="color:#0055ff; font-family:var(--mono); font-size:14px; font-weight:bold;">${comboStr}</span> <span style="color:#0055ff; font-size:14px; font-weight:bold;">= ${formatSize(subTotal)}</span><br>
+            ↳ Ask need: <b style="color:#ff0000;">${needStr} (${neededReels} reel${neededReels > 1 ? 's' : ''})</b>
+          </div>`,
+          usedIds: sub.map(c => c.id),
+          setsConsumed: sets
+        };
       }
-
-      let reqMin = minNeed / parts;
-      let reqMax = maxNeed / parts;
-      let neededReels = sets * parts;
-
-      let needStr = toRangeStr(reqMin, reqMax);
-
-      return {
-        html: `<div class="suggestion-item">
-          <div style="font-size:11px; color:#000000; margin-bottom:4px; font-weight:bold;">${uniqueCustomers} &nbsp;|&nbsp; GSM ${gsm} / ${maxBf} &nbsp;|&nbsp; Dia ${dia}</div>
-          <span style="color:#0055ff; font-family:var(--mono); font-size:14px; font-weight:bold;">${comboStr}</span> <span style="color:#0055ff; font-size:14px; font-weight:bold;">= ${formatSize(subTotal)}</span><br>
-          ↳ Ask need: <b style="color:#ff0000;">${needStr} (${neededReels} reel${neededReels > 1 ? 's' : ''})</b>
-        </div>`,
-        usedIds: sub.map(c => c.id),
-        setsConsumed: sets
-      };
     };
 
     let getCombos = (arr, k) => {
@@ -1408,7 +1420,6 @@ function updateSuggestionBoard() {
         let bestResult = null;
         let minGap = Infinity;
 
-        // Start checking combinations from highest quantity down to 1
         for (let size = Math.min(4, unmatchedReelsList.length); size >= 1; size--) {
           let subsets = getCombos(unmatchedReelsList, size);
           for (let sub of subsets) {
@@ -1428,7 +1439,6 @@ function updateSuggestionBoard() {
         if (bestResult) {
           finalSuggestions.push(bestResult.html);
 
-          // Purge consumed reels for the NEXT iteration so all inventory gets swept correctly
           let consumedIds = bestResult.usedIds;
           for(let s = 0; s < bestResult.setsConsumed; s++) {
              consumedIds.forEach(usedId => {
@@ -1437,7 +1447,6 @@ function updateSuggestionBoard() {
              });
           }
         } else {
-          // If no gap >= 65 can be formed from the leftovers, we must stop to prevent infinity loops
           keepSearching = false;
         }
     }
@@ -1455,6 +1464,7 @@ function setFilter(f) {
   if(viewMode === 'data') return;
   viewMode = 'match';
   currentFilter = f;
+  let setsLabel = currentFilter === 'nomatch' ? 'Reels' : 'Sets';
   document.querySelectorAll('.pill').forEach(p => {
     p.className = 'pill';
     if (p.dataset.filter === f) {
@@ -1581,7 +1591,7 @@ function renderTable() {
   if (viewMode !== 'data') {
       let sumMatchedTons = matchRows.filter(r => r._match).reduce((sum, r) => sum + (r.tons || 0), 0);
       let activeRows = allRows.filter(r => r._selected !== false);
-      let sumAllOrderTons = activeRows.reduce((sum, r) => sum + ((r.size / 2.54 * 12.2 * r.reel) / 1000), 0);
+      let sumAllOrderTons = activeRows.reduce((sum, r) => sum + calcTons(r.size, r.reel, r.dia), 0);
       let balanceTons = Math.max(0, sumAllOrderTons - sumMatchedTons);
       let currentViewSets = viewRows.reduce((sum, r) => sum + (r.reel || 0), 0);
       
