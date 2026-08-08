@@ -869,8 +869,16 @@ function restoreAppState() {
   const savedState = JSON.parse(localStorage.getItem('deckleAppState') || 'null');
   if (!savedState || !savedState.allRows || savedState.allRows.length === 0) return false;
   
-  allRows       = savedState.allRows || [];
-  matchRows     = savedState.matchRows || [];
+  // PURIFIER: Cleans up any "undefined" values from older saved states so manual entries match flawlessly
+  allRows = (savedState.allRows || []).map(r => {
+      r.cobb = (r.cobb !== undefined && String(r.cobb) !== 'undefined') ? String(r.cobb).trim() : '-';
+      r.moisture = (r.moisture !== undefined && String(r.moisture) !== 'undefined') ? String(r.moisture).trim() : '-';
+      r.dia = (r.dia !== undefined && String(r.dia) !== 'undefined') ? String(r.dia).trim() : '-';
+      r.date = (r.date !== undefined && String(r.date) !== 'undefined') ? String(r.date).trim() : '-';
+      return r;
+  });
+  
+  matchRows = savedState.matchRows || [];
   loadedFiles   = savedState.loadedFiles || [];
   currentFilter = savedState.currentFilter || 'all';
   viewMode      = savedState.viewMode || 'match';
@@ -996,14 +1004,20 @@ function handleFile(input, isAppend) {
         let sizeRaw = String(getVal(['size', 'deckle', 'mm', 'cm', 'inch']) || '0');
         let parsed = parseSizeInput(sizeRaw);
         let reel = parseNumber(getVal(['reel', 'qty', 'quantity', 'set']));
-        let dia = getVal(['dia', 'shade']) || '-';
-        let cobb = String(getVal(['cobb']) || '-').trim();
-        let moisture = String(getVal(['moist', 'moisture']) || '-').trim();
+        
+        let rawDia = getVal(['dia', 'shade']);
+        let dia = (rawDia !== undefined && rawDia !== null && rawDia !== '') ? String(rawDia).trim() : '-';
+        
+        let rawCobb = getVal(['cobb']);
+        let cobb = (rawCobb !== undefined && rawCobb !== null && rawCobb !== '') ? String(rawCobb).trim() : '-';
+        
+        let rawMoist = getVal(['moist', 'moisture']);
+        let moisture = (rawMoist !== undefined && rawMoist !== null && rawMoist !== '') ? String(rawMoist).trim() : '-';
         
         let dateRaw = getVal(['date', 'added']);
-        let dateStr = dateRaw ? String(dateRaw).trim() : fallbackDate;
+        let dateStr = (dateRaw !== undefined && dateRaw !== null && dateRaw !== '') ? String(dateRaw).trim() : fallbackDate;
         
-        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, cobb, moisture, reel, dia: String(dia), date: dateStr, fileName: currentFileName, _selected: true };
+        return { id: 0, customer, gsm, bf, size: parsed.size, displaySize: parsed.displaySize, cobb, moisture, reel, dia, date: dateStr, fileName: currentFileName, _selected: true };
       }).filter(row => row.size > 0 && row.reel > 0);
       
       if (isAppend) {
@@ -1547,8 +1561,7 @@ function setFilter(f) {
   if(viewMode === 'data') return;
   viewMode = 'match';
   currentFilter = f;
-  
-  // Manage pills UI
+  let setsLabel = currentFilter === 'nomatch' ? 'Reels' : 'Sets';
   document.querySelectorAll('.pill').forEach(p => {
     p.className = 'pill';
     if (p.dataset.filter === f) {
@@ -1557,7 +1570,6 @@ function setFilter(f) {
       if (f === 'nomatch') p.classList.add('active-nomatch');
     }
   });
-  
   if (matchRows.length) applyFilter(f);
   saveAppState();
 }
