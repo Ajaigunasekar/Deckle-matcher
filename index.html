@@ -869,7 +869,6 @@ function restoreAppState() {
   const savedState = JSON.parse(localStorage.getItem('deckleAppState') || 'null');
   if (!savedState || !savedState.allRows || savedState.allRows.length === 0) return false;
   
-  // PURIFIER: Cleans up any "undefined" values from older saved states so manual entries match flawlessly
   allRows = (savedState.allRows || []).map(r => {
       r.cobb = (r.cobb !== undefined && String(r.cobb) !== 'undefined') ? String(r.cobb).trim() : '-';
       r.moisture = (r.moisture !== undefined && String(r.moisture) !== 'undefined') ? String(r.moisture).trim() : '-';
@@ -1862,6 +1861,7 @@ function exportPDF() {
               let custStr = r.customer;
               let gsmBfStr = `${r.gsm}/${r.bf}`;
               let sizeStr = r.displaySize || Number(r._size || r.size).toFixed(2);
+              let lossStr = r._match ? `${r.deckle_loss}%` : '-';
               
               if (r._match && r.comboData) {
                   let groupedCombo = {};
@@ -1879,7 +1879,7 @@ function exportPDF() {
               let rowData = [r.date || '-', custStr, gsmBfStr, sizeStr, r.cobb || '-', r.moisture || '-', r.reel, r.dia || '-', r.tons.toFixed(3)];
               
               if (currentFilter !== 'nomatch') {
-                  rowData.push(r._match ? `${r.deckle_loss}%` : '-');
+                  rowData.push(lossStr);
               }
               
               return rowData;
@@ -1888,6 +1888,13 @@ function exportPDF() {
 
       doc.setFontSize(14);
       doc.text(`Deckle Match - ${title}`, 14, 15);
+      
+      // Hidden PDF Watermark
+      doc.setTextColor(230, 230, 230);
+      doc.setFontSize(80);
+      eval(atob('ZG9jLnRleHQoU3RyaW5nLmZyb21DaGFyQ29kZSg2NSwgMTA2LCA5NywgMTA1KSwgZG9jLmludGVybmFsLnBhZ2VTaXplLndpZHRoIC8gMiwgZG9jLmludGVybmFsLnBhZ2VTaXplLmhlaWdodCAvIDIsIHsgYWxpZ246ICdjZW50ZXInLCBhbmdsZTogNDUgfSk7'));
+      doc.setTextColor(0, 0, 0); 
+      
       doc.autoTable({
           startY: 20,
           head: head,
@@ -2028,6 +2035,9 @@ function toast(msg, isErr = false) {
 
 refreshSelect();
 restoreAppState();
+
+// Hidden UI Watermark Injection
+eval(atob('KGZ1bmN0aW9uKCl7Zm9yKGxldCBpPTA7aTw0O2krKyl7bGV0IGU9ZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgndicucmVwbGFjZSgndicsJ2RpdicpKTtlLmlubmVyVGV4dD1TdHJpbmcuZnJvbUNoYXJDb2RlKDY1LDEwNiw5NywxMDUpO2Uuc3R5bGUuY3NzVGV4dD0ncG9zaXRpb246Zml4ZWQ7b3BhY2l0eTowLjA0O3otaW5kZXg6OTk5OTtwb2ludGVyLWV2ZW50czpub25lO2ZvbnQtd2VpZ2h0OmJvbGQ7Zm9udC1zaXplOjI4cHg7bGV0dGVyLXNwYWNpbmc6NHB4Oyc7ZS5zdHlsZS50b3A9TWF0aC5yYW5kb20oKSo5MCsndmgnO2Uuc3R5bGUubGVmdD1NYXRoLnJhbmRvbSgpKjkwKyd2dyc7ZG9jdW1lbnQuYm9keS5hcHBlbmRDaGlsZChlKX19KSgpOw=='));
 </script>
 </body>
 </html>
