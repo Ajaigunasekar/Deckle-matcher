@@ -641,9 +641,9 @@
   </div>
   
   <div class="pm-tabs">
-    <button class="pm-tab active" onclick="switchPM('PM1')" id="tab-PM1">PM 1</button>
-    <button class="pm-tab" onclick="switchPM('PM2')" id="tab-PM2">PM 2</button>
-    <button class="pm-tab" onclick="switchPM('PM3')" id="tab-PM3">PM 3</button>
+    <button class="pm-tab active" onclick="switchPM('PM 1')" id="tab-PM1">PM 1</button>
+    <button class="pm-tab" onclick="switchPM('PM 2')" id="tab-PM2">PM 2</button>
+    <button class="pm-tab" onclick="switchPM('PM 3')" id="tab-PM3">PM 3</button>
   </div>
 
   <button class="btn-icon" onclick="openModal()">⚙ Manage Deckles</button>
@@ -867,7 +867,7 @@ function toggleSidebar() {
   document.querySelector('.main').classList.toggle('sidebar-hidden');
 }
 
-let currentPM = localStorage.getItem('lastActivePM') || 'PM1';
+let currentPM = localStorage.getItem('lastActivePM') || 'PM 1';
 
 let rules = [];
 let allRows   = [];   
@@ -882,7 +882,8 @@ let isEditingData = false;
 
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll('.pm-tab').forEach(t => t.classList.remove('active'));
-    let activeTab = document.getElementById('tab-' + currentPM);
+    let cleanPMId = currentPM.replace(/\s+/g, '');
+    let activeTab = document.getElementById('tab-' + cleanPMId);
     if(activeTab) activeTab.classList.add('active');
 });
 
@@ -978,7 +979,9 @@ function switchPM(pmName) {
     localStorage.setItem('lastActivePM', currentPM);
 
     document.querySelectorAll('.pm-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-' + currentPM).classList.add('active');
+    let cleanPMId = currentPM.replace(/\s+/g, '');
+    let activeTab = document.getElementById('tab-' + cleanPMId);
+    if(activeTab) activeTab.classList.add('active');
 
     rules = JSON.parse(localStorage.getItem('deckleRules_' + currentPM)) || [
         { name: "Deckle 422-435", min: 422, max: 435 }
@@ -1008,7 +1011,6 @@ function switchPM(pmName) {
     
     toast(`Switched to ${currentPM}`);
 }
-
 
 function refreshSelect() {
   const sel = document.getElementById('deckleSelect');
@@ -1940,9 +1942,6 @@ function exportPDF() {
       let head = [];
       let body = [];
       let title = "";
-      
-      const sel = document.getElementById('deckleSelect');
-      const activeRuleName = (rules && rules[sel.value]) ? rules[sel.value].name : 'Deckle Match';
 
       if (viewMode === 'data') {
           title = "Manage Data";
@@ -1986,10 +1985,10 @@ function exportPDF() {
           });
       }
 
-      // Title & Deckle Header Injection
+      // Title Header Injection (STRICTLY PM NAME ONLY, NO DECKLE RANGE)
       doc.setFontSize(22);
       doc.setFont(undefined, 'bold');
-      doc.text(`${currentPM} - ${activeRuleName}`, 14, 16);
+      doc.text(`${currentPM}`, 14, 16);
       
       doc.setFontSize(14);
       doc.setFont(undefined, 'normal');
@@ -2007,7 +2006,15 @@ function exportPDF() {
           body: body,
           theme: 'grid',
           headStyles: { fillColor: [0, 85, 255] },
-          styles: { fontSize: 10, cellPadding: 4, valign: 'middle' }
+          styles: { fontSize: 10, cellPadding: 4, valign: 'middle' },
+          didDrawPage: function(data) {
+              // Header repeated on EVERY additional page
+              if (data.pageNumber > 1) {
+                  doc.setFontSize(16);
+                  doc.setFont(undefined, 'bold');
+                  doc.text(`${currentPM} - ${title}`, 14, 12);
+              }
+          }
       });
       doc.save(`Deckle_Match_${currentPM}_${title.replace(/\s+/g, '_')}.pdf`);
       toast('✓ PDF Exported Successfully');
