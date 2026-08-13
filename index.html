@@ -41,7 +41,7 @@
   .header {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 18px 24px 14px;
+    padding: 14px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -64,6 +64,32 @@
     font-weight: bold;
     margin-top: 4px;
   }
+  
+  /* ── PM Tabs ── */
+  .pm-tabs {
+    display: flex;
+    gap: 8px;
+    background: var(--card2);
+    padding: 6px;
+    border-radius: var(--radius-sm);
+  }
+  .pm-tab {
+    background: transparent;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .pm-tab.active {
+    background: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0,85,255,0.2);
+  }
+
   .btn-icon {
     background: var(--card);
     border: 1px solid var(--border);
@@ -90,7 +116,7 @@
     display: grid;
     grid-template-columns: 280px 1fr;
     grid-template-rows: auto 1fr;
-    height: calc(100vh - 64px);
+    height: calc(100vh - 72px);
     transition: grid-template-columns 0.3s ease;
   }
   
@@ -577,6 +603,9 @@
   }
 
   @media (max-width: 768px) {
+    .header { flex-wrap: wrap; }
+    .pm-tabs { order: 3; width: 100%; justify-content: center; margin-top: 8px;}
+    .btn-icon:last-child { margin-left: auto; }
     .main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; height: auto; }
     .main.sidebar-hidden .sidebar {
       display: none;
@@ -610,6 +639,13 @@
       <div class="logo-sub">Order Size Matcher</div>
     </div>
   </div>
+  
+  <div class="pm-tabs">
+    <button class="pm-tab active" onclick="switchPM('PM1')" id="tab-PM1">PM 1</button>
+    <button class="pm-tab" onclick="switchPM('PM2')" id="tab-PM2">PM 2</button>
+    <button class="pm-tab" onclick="switchPM('PM3')" id="tab-PM3">PM 3</button>
+  </div>
+
   <button class="btn-icon" onclick="openModal()">⚙ Manage Deckles</button>
 </div>
 
@@ -831,9 +867,9 @@ function toggleSidebar() {
   document.querySelector('.main').classList.toggle('sidebar-hidden');
 }
 
-let rules = JSON.parse(localStorage.getItem('deckleRules') || 'null') || [
-  { name: "Deckle 422-435", min: 422, max: 435 }
-];
+let currentPM = localStorage.getItem('lastActivePM') || 'PM1';
+
+let rules = [];
 let allRows   = [];   
 let matchRows = [];   
 let viewRows  = [];   
@@ -844,8 +880,14 @@ let sortAsc   = true;
 let viewMode  = 'match'; 
 let isEditingData = false;
 
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('.pm-tab').forEach(t => t.classList.remove('active'));
+    let activeTab = document.getElementById('tab-' + currentPM);
+    if(activeTab) activeTab.classList.add('active');
+});
+
 function saveRules() {
-  localStorage.setItem('deckleRules', JSON.stringify(rules));
+  localStorage.setItem('deckleRules_' + currentPM, JSON.stringify(rules));
 }
 
 function saveAppState() {
@@ -859,15 +901,26 @@ function saveAppState() {
     bfTolerance: document.getElementById('bfToleranceToggle') ? document.getElementById('bfToleranceToggle').checked : false
   };
   try {
-    localStorage.setItem('deckleAppState', JSON.stringify(state));
+    localStorage.setItem('deckleAppState_' + currentPM, JSON.stringify(state));
   } catch (e) {
     console.warn("LocalStorage space limit exceeded", e);
   }
 }
 
 function restoreAppState() {
-  const savedState = JSON.parse(localStorage.getItem('deckleAppState') || 'null');
-  if (!savedState || !savedState.allRows || savedState.allRows.length === 0) return false;
+  rules = JSON.parse(localStorage.getItem('deckleRules_' + currentPM)) || [
+      { name: "Deckle 422-435", min: 422, max: 435 }
+  ];
+  
+  const savedState = JSON.parse(localStorage.getItem('deckleAppState_' + currentPM) || 'null');
+  if (!savedState || !savedState.allRows || savedState.allRows.length === 0) {
+      allRows = [];
+      matchRows = [];
+      loadedFiles = [];
+      currentFilter = 'all';
+      viewMode = 'match';
+      return false;
+  }
   
   allRows = (savedState.allRows || []).map(r => {
       r.cobb = (r.cobb !== undefined && String(r.cobb) !== 'undefined') ? String(r.cobb).trim() : '-';
@@ -881,6 +934,8 @@ function restoreAppState() {
   loadedFiles   = savedState.loadedFiles || [];
   currentFilter = savedState.currentFilter || 'all';
   viewMode      = savedState.viewMode || 'match';
+  
+  refreshSelect();
   
   if (savedState.selectedDeckleIndex !== undefined && document.getElementById('deckleSelect')) {
     document.getElementById('deckleSelect').value = savedState.selectedDeckleIndex;
@@ -912,6 +967,48 @@ function restoreAppState() {
   }
   return true;
 }
+
+function switchPM(pmName) {
+    if (currentPM === pmName) return;
+
+    saveRules();
+    saveAppState();
+
+    currentPM = pmName;
+    localStorage.setItem('lastActivePM', currentPM);
+
+    document.querySelectorAll('.pm-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + currentPM).classList.add('active');
+
+    rules = JSON.parse(localStorage.getItem('deckleRules_' + currentPM)) || [
+        { name: "Deckle 422-435", min: 422, max: 435 }
+    ];
+    
+    allRows = [];   
+    matchRows = [];   
+    viewRows  = [];   
+    loadedFiles = []; 
+    currentFilter = 'all';
+    sortKey   = null;
+    sortAsc   = true;
+    viewMode  = 'match'; 
+    isEditingData = false;
+    if(document.getElementById('searchInput')) document.getElementById('searchInput').value = '';
+
+    refreshSelect(); 
+
+    const restored = restoreAppState();
+    if (!restored) {
+        document.getElementById('uploadZone').style.display = '';
+        document.getElementById('fileLoadedBlock').style.display = 'none';
+        document.getElementById('statsBar').style.display = 'none';
+        setFilter('all');
+        renderTable();
+    }
+    
+    toast(`Switched to ${currentPM}`);
+}
+
 
 function refreshSelect() {
   const sel = document.getElementById('deckleSelect');
@@ -1843,6 +1940,9 @@ function exportPDF() {
       let head = [];
       let body = [];
       let title = "";
+      
+      const sel = document.getElementById('deckleSelect');
+      const activeRuleName = (rules && rules[sel.value]) ? rules[sel.value].name : 'Deckle Match';
 
       if (viewMode === 'data') {
           title = "Manage Data";
@@ -1886,24 +1986,30 @@ function exportPDF() {
           });
       }
 
+      // Title & Deckle Header Injection
+      doc.setFontSize(22);
+      doc.setFont(undefined, 'bold');
+      doc.text(`${currentPM} - ${activeRuleName}`, 14, 16);
+      
       doc.setFontSize(14);
-      doc.text(`Deckle Match - ${title}`, 14, 15);
+      doc.setFont(undefined, 'normal');
+      doc.text(title, 14, 24);
       
       // Hidden PDF Watermark
-      doc.setTextColor(230, 230, 230);
-      doc.setFontSize(80);
+      doc.setTextColor(240, 245, 255);
+      doc.setFontSize(100);
       eval(atob('ZG9jLnRleHQoU3RyaW5nLmZyb21DaGFyQ29kZSg2NSwgMTA2LCA5NywgMTA1KSwgZG9jLmludGVybmFsLnBhZ2VTaXplLndpZHRoIC8gMiwgZG9jLmludGVybmFsLnBhZ2VTaXplLmhlaWdodCAvIDIsIHsgYWxpZ246ICdjZW50ZXInLCBhbmdsZTogNDUgfSk7'));
       doc.setTextColor(0, 0, 0); 
       
       doc.autoTable({
-          startY: 20,
+          startY: 30,
           head: head,
           body: body,
           theme: 'grid',
           headStyles: { fillColor: [0, 85, 255] },
           styles: { fontSize: 10, cellPadding: 4, valign: 'middle' }
       });
-      doc.save(`Deckle_Match_${title.replace(/\s+/g, '_')}.pdf`);
+      doc.save(`Deckle_Match_${currentPM}_${title.replace(/\s+/g, '_')}.pdf`);
       toast('✓ PDF Exported Successfully');
   } catch (e) {
       console.error(e);
@@ -1912,7 +2018,7 @@ function exportPDF() {
 }
 
 function clearAll() {
-  if (!confirm("Are you sure you want to clear all data? This cannot be undone.")) return;
+  if (!confirm(`Are you sure you want to clear all data in ${currentPM}? This cannot be undone.`)) return;
   allRows = matchRows = viewRows = loadedFiles = [];
   viewMode = 'match';
   isEditingData = false;
@@ -1929,8 +2035,8 @@ function clearAll() {
   document.getElementById('emptyState').querySelector('.empty-title').textContent = 'No data loaded';
   document.getElementById('emptyState').querySelector('.empty-sub').textContent = 'Upload your Excel file or click \'Manage Data\' to add manual orders.';
   document.querySelector('.main').classList.remove('sidebar-hidden');
-  localStorage.removeItem('deckleAppState');
-  toast('Cleared');
+  localStorage.removeItem('deckleAppState_' + currentPM);
+  toast(`${currentPM} Cleared`);
 }
 
 function openModal() {
@@ -2033,7 +2139,6 @@ function toast(msg, isErr = false) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
-refreshSelect();
 restoreAppState();
 
 // Hidden UI Watermark Injection
