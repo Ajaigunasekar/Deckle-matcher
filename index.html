@@ -684,14 +684,14 @@
       
       <div style="margin-top: 12px;">
         <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:bold; cursor:pointer; color:var(--text);">
-          <input type="checkbox" id="bfToleranceToggle" onchange="saveAppState(); if(allRows.filter(r => r._selected !== false).length > 0) { runMatch(); }" style="width:16px; height:16px; accent-color:var(--accent);">
+          <input type="checkbox" id="bfToleranceToggle" onchange="saveAppState();" style="width:16px; height:16px; accent-color:var(--accent);">
           Allow +/- 2 BF Tolerance
         </label>
       </div>
       
       <div style="margin-top: 8px;">
         <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:bold; cursor:pointer; color:var(--text);">
-          <input type="checkbox" id="directMatchToggle" onchange="saveAppState(); if(allRows.filter(r => r._selected !== false).length > 0) { runMatch(); }" style="width:16px; height:16px; accent-color:var(--accent);">
+          <input type="checkbox" id="directMatchToggle" onchange="saveAppState();" style="width:16px; height:16px; accent-color:var(--accent);">
           Direct Match (Same Customer Only)
         </label>
       </div>
