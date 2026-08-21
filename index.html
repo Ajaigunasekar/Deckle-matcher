@@ -644,6 +644,7 @@
     <button class="pm-tab active" onclick="switchPM('PM 1')" id="tab-PM1">PM 1</button>
     <button class="pm-tab" onclick="switchPM('PM 2')" id="tab-PM2">PM 2</button>
     <button class="pm-tab" onclick="switchPM('PM 3')" id="tab-PM3">PM 3</button>
+    <button class="pm-tab" onclick="switchPM('GYT')" id="tab-GYT">GYT</button>
   </div>
 
   <button class="btn-icon" onclick="openModal()">⚙ Manage Deckles</button>
@@ -683,8 +684,15 @@
       
       <div style="margin-top: 12px;">
         <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:bold; cursor:pointer; color:var(--text);">
-          <input type="checkbox" id="bfToleranceToggle" onchange="saveAppState();" style="width:16px; height:16px; accent-color:var(--accent);">
+          <input type="checkbox" id="bfToleranceToggle" onchange="saveAppState(); if(allRows.filter(r => r._selected !== false).length > 0) { runMatch(); }" style="width:16px; height:16px; accent-color:var(--accent);">
           Allow +/- 2 BF Tolerance
+        </label>
+      </div>
+      
+      <div style="margin-top: 8px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:bold; cursor:pointer; color:var(--text);">
+          <input type="checkbox" id="directMatchToggle" onchange="saveAppState(); if(allRows.filter(r => r._selected !== false).length > 0) { runMatch(); }" style="width:16px; height:16px; accent-color:var(--accent);">
+          Direct Match (Same Customer Only)
         </label>
       </div>
     </div>
@@ -899,7 +907,8 @@ function saveAppState() {
     currentFilter: currentFilter,
     viewMode: viewMode,
     selectedDeckleIndex: document.getElementById('deckleSelect') ? document.getElementById('deckleSelect').value : 0,
-    bfTolerance: document.getElementById('bfToleranceToggle') ? document.getElementById('bfToleranceToggle').checked : false
+    bfTolerance: document.getElementById('bfToleranceToggle') ? document.getElementById('bfToleranceToggle').checked : false,
+    directMatch: document.getElementById('directMatchToggle') ? document.getElementById('directMatchToggle').checked : false
   };
   try {
     localStorage.setItem('deckleAppState_' + currentPM, JSON.stringify(state));
@@ -944,6 +953,10 @@ function restoreAppState() {
   
   if (savedState.bfTolerance !== undefined && document.getElementById('bfToleranceToggle')) {
     document.getElementById('bfToleranceToggle').checked = savedState.bfTolerance;
+  }
+  
+  if (savedState.directMatch !== undefined && document.getElementById('directMatchToggle')) {
+    document.getElementById('directMatchToggle').checked = savedState.directMatch;
   }
   
   document.getElementById('uploadZone').style.display = 'none';
@@ -1309,6 +1322,7 @@ function runMatch() {
   if (!rule) { toast('Please select a deckle range', true); return; }
 
   const bfTol = document.getElementById('bfToleranceToggle') && document.getElementById('bfToleranceToggle').checked ? 2 : 0;
+  const directMatch = document.getElementById('directMatchToggle') && document.getElementById('directMatchToggle').checked;
 
   viewMode = 'match';
   matchRows = [];
@@ -1368,6 +1382,7 @@ function runMatch() {
              if (item.dia !== currentCombo[0].dia) continue;
              if (item.cobb !== currentCombo[0].cobb) continue;
              if (item.moisture !== currentCombo[0].moisture) continue;
+             if (directMatch && item.customer !== currentCombo[0].customer) continue;
           }
 
           let newMinBf = Math.min(minBf, item.bf);
@@ -1509,6 +1524,7 @@ function updateSuggestionBoard() {
   if (!rule) return;
 
   const bfTol = document.getElementById('bfToleranceToggle') && document.getElementById('bfToleranceToggle').checked ? 2 : 0;
+  const directMatch = document.getElementById('directMatchToggle') && document.getElementById('directMatchToggle').checked;
 
   let groups = {};
   viewRows.forEach(row => {
@@ -1533,6 +1549,11 @@ function updateSuggestionBoard() {
     let evaluateSubset = (sub) => {
       let bfs = sub.map(c => c.bf);
       if (Math.max(...bfs) - Math.min(...bfs) > bfTol) return null;
+      
+      if (directMatch) {
+          let customers = [...new Set(sub.map(c => c.customer))];
+          if (customers.length > 1) return null;
+      }
 
       let subTotal = sub.reduce((sum, c) => sum + c.size, 0);
       let gap = rule.min - subTotal;
@@ -1942,6 +1963,9 @@ function exportPDF() {
       let head = [];
       let body = [];
       let title = "";
+      
+      const sel = document.getElementById('deckleSelect');
+      const activeRuleName = (rules && rules[sel.value]) ? rules[sel.value].name : 'Deckle Match';
 
       if (viewMode === 'data') {
           title = "Manage Data";
